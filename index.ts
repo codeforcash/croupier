@@ -1,11 +1,12 @@
 // tsc --lib es2015 index.ts
 
-import "source-map-support/register";
+import axios, { AxiosResponse } from "axios";
 
-const _ = await import("lodash");
-const axios = await import("axios");
-const os = await import("os");
-const Bot = await import("./node_modules/keybase-bot");
+import _ from "lodash";
+import * as os from "os";
+import * as Bot from "./keybase-bot";
+
+import "source-map-support/register";
 
 const bot = new Bot(os.homedir());
 const bot2 = new Bot(os.homedir());
@@ -16,7 +17,7 @@ const paperkey2 = process.env.CROUPIER_PAPERKEY_2;
 
 const isNumber = (value) => !Number.isNaN(parseFloat(value));
 
-import { ChatChannel, MessageSummary, Transaction } from "keybase-bot";
+import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
 
 interface IParticipant {
   username: string;
@@ -25,7 +26,7 @@ interface IParticipant {
 
 interface ISnipe {
   wager: number;
-  participants: T<IParticipant>;
+  participants: Array<IParticipant>;
 }
 
 function processRefund(txn: Transaction, channel: ChatChannel): void {
@@ -76,7 +77,7 @@ function sendAmountToWinner(winnerUsername: string, wager: number, channel: Chat
   })).then((apiResponses) => {
      transactionFees = 0;
      bounty = 0;
-     apiResponses.forEach((apiResponse) => {
+     apiResponses.forEach((apiResponse: AxiosResponse) => {
        transactionFees += (parseFloat(apiResponse.data.fee_paid) * 0.0000001);
        bounty += snipe.wager;
      });
@@ -92,7 +93,7 @@ function sendAmountToWinner(winnerUsername: string, wager: number, channel: Chat
   });
 }
 
-function resolveFlip(channel: ChatChannel, results: T<string>): void {
+function resolveFlip(channel: ChatChannel, results: Array<string>): void {
   const winnerUsername = results[0];
   const snipe = activeSnipes[JSON.stringify(channel)];
   sendAmountToWinner(winnerUsername, snipe.wager, channel);
