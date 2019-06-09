@@ -212,7 +212,7 @@ function checkForSnipe(msg: MessageSummary): void {
 
   const msgText = msg.content.text.body;
 
-  const cryptosnipeRegex = new RegExp(`^\\/cryptosnipe \\+([0-9]+(?:[\\.][0-9]*)?|\\.[0-9]+)XLM@${botUsername}`);
+  const cryptosnipeRegex = new RegExp(`^\\/cryptosnipe\\s+\\+([0-9]+(?:[\\.][0-9]*)?|\\.[0-9]+)XLM@${botUsername}`);
 
   const matchResults = msgText.match(cryptosnipeRegex);
   if (matchResults === null) {
