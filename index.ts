@@ -2,7 +2,7 @@
 
 import axios, { AxiosResponse } from "axios";
 
-import _ from "lodash";
+import * as _ from "lodash";
 import * as os from "os";
 import * as Bot from "./keybase-bot";
 
