@@ -37,7 +37,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 exports.__esModule = true;
 var axios_1 = require("axios");
-var lodash_1 = require("lodash");
+var _ = require("lodash");
 var os = require("os");
 var Bot = require("./keybase-bot");
 require("source-map-support/register");
@@ -54,7 +54,7 @@ function processRefund(txn, channel) {
         // API returns a response, number of stroops
         var transactionFees = parseFloat(response.data.fee_paid) * 0.0000001;
         console.log("refunding txn fees", transactionFees);
-        var refund = lodash_1["default"].round(txn.amount - transactionFees, 7);
+        var refund = _.round(txn.amount - transactionFees, 7);
         console.log("total refund is", refund);
         bot.wallet.send(txn.fromUsername, refund.toString()).then(function (refundTxn) {
             var refundMsg = "```+" + refund + "XLM@" + txn.fromUsername + "``` ";
@@ -87,7 +87,7 @@ function sendAmountToWinner(winnerUsername, wager, channel) {
             transactionFees += (parseFloat(apiResponse.data.fee_paid) * 0.0000001);
             bounty += snipe.wager;
         });
-        bounty = lodash_1["default"].round(bounty - transactionFees, 7);
+        bounty = _.round(bounty - transactionFees, 7);
         bot.wallet.send(winnerUsername, bounty.toString()).then(function (txn) {
             var bountyMsg = "```+" + bounty + "XLM@" + winnerUsername + "``` ";
             bountyMsg += ":arrow_right: ";
@@ -144,7 +144,7 @@ function launchSnipe(wager, channel) {
     // Tell the channel: OK, your snipe has been accepted for routing.
     var message = "The snipe is on.  ";
     message += "Anybody is free to send me _exactly_ " + wager + "XLM within 30 seconds: ";
-    message += "```+" + wager + "XLM@beemo```.";
+    message += "```+" + wager + "XLM@" + botUsername + "```.";
     message += " If there are not at >= 2 confirmed participants, the snipe is going ";
     message += "to be cancelled with deposits refunded, less transaction fess.";
     bot.chat.send(channel, { body: message });
@@ -195,7 +195,7 @@ function executeFlipOrCancel(channel) {
 }
 function checkForSnipe(msg) {
     if (msg.channel.public || msg.channel.membersType !== "team" || msg.channel.topicType !== "chat") {
-        // Beemo only listens to public conversations.
+        // Croupier only listens to public conversations.
         return;
     }
     if (typeof activeSnipes[JSON.stringify(msg.channel)] !== "undefined") {
@@ -205,10 +205,11 @@ function checkForSnipe(msg) {
         return;
     }
     var msgText = msg.content.text.body;
-    var matchResults = msgText.match(/^\/cryptosnipe \+([0-9]+(?:[\.][0-9]*)?|\.[0-9]+)XLM@beemo/);
+    var cryptosnipeRegex = new RegExp("^/cryptosnipe +([0-9]+(?:[.][0-9]*)?|.[0-9]+)XLM@" + botUsername);
+    var matchResults = msgText.match(cryptosnipeRegex);
     if (matchResults === null) {
         bot.chat.send(msg.channel, {
-            body: "Format is: \`\`\`/cryptosnipe +0.005XLM@beemo\`\`\`"
+            body: "Format is: ```/cryptosnipe +0.005XLM@" + botUsername + "```"
         });
         return;
     }
@@ -228,7 +229,7 @@ function checkForSnipe(msg) {
     if (wager > 0.01) {
         // throw error, amount must be less than threshold
         bot.chat.send(msg.channel, {
-            body: "Beemo is prototype stage software.  Please do not wager more than 0.01XLM"
+            body: botUsername + " is prototype stage software.  Please do not wager more than 0.01XLM"
         });
         return;
     }
@@ -307,7 +308,7 @@ function main() {
                         membersType: "team", name: "mkbot", public: false, topicName: "test3", topicType: "chat"
                     };
                     message = {
-                        body: "beemo has been restarted ... but is still in development mode.  please do not @ me.  Now in TypeScript!"
+                        body: botUsername + " has been restarted ... but is still in development mode.  please do not @ me.  Now in TypeScript!"
                     };
                     bot.chat.send(channel, message);
                     return [4 /*yield*/, bot.chat.watchAllChannelsForNewMessages(function (msg) { return __awaiter(_this, void 0, void 0, function () {

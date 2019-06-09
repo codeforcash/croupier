@@ -144,7 +144,7 @@ function launchSnipe(wager: number, channel: ChatChannel): void {
   // Tell the channel: OK, your snipe has been accepted for routing.
   let message = "The snipe is on.  ";
   message += `Anybody is free to send me _exactly_ ${wager}XLM within 30 seconds: `;
-  message += `\`\`\`+${wager}XLM@beemo\`\`\`.`;
+  message += `\`\`\`+${wager}XLM@${botUsername}\`\`\`.`;
   message += ` If there are not at >= 2 confirmed participants, the snipe is going `;
   message += `to be cancelled with deposits refunded, less transaction fess.`;
   bot.chat.send(channel, { body: message });
@@ -199,7 +199,7 @@ function executeFlipOrCancel(channel: ChatChannel): void {
 
 function checkForSnipe(msg: MessageSummary): void {
   if (msg.channel.public || msg.channel.membersType !== "team" || msg.channel.topicType !== "chat") {
-    // Beemo only listens to public conversations.
+    // Croupier only listens to public conversations.
     return;
   }
 
@@ -211,10 +211,13 @@ function checkForSnipe(msg: MessageSummary): void {
   }
 
   const msgText = msg.content.text.body;
-  const matchResults = msgText.match(/^\/cryptosnipe \+([0-9]+(?:[\.][0-9]*)?|\.[0-9]+)XLM@beemo/);
+
+  const cryptosnipeRegex = new RegExp(`^\/cryptosnipe \+([0-9]+(?:[\.][0-9]*)?|\.[0-9]+)XLM@${botUsername}`);
+
+  const matchResults = msgText.match(cryptosnipeRegex);
   if (matchResults === null) {
     bot.chat.send(msg.channel, {
-      body: "Format is: \`\`\`/cryptosnipe +0.005XLM@beemo\`\`\`",
+      body: `Format is: \`\`\`/cryptosnipe +0.005XLM@${botUsername}\`\`\``,
     });
     return;
   }
@@ -234,7 +237,7 @@ function checkForSnipe(msg: MessageSummary): void {
   if (wager > 0.01) {
     // throw error, amount must be less than threshold
     bot.chat.send(msg.channel, {
-      body: "Beemo is prototype stage software.  Please do not wager more than 0.01XLM",
+      body: `${botUsername} is prototype stage software.  Please do not wager more than 0.01XLM`,
     });
     return;
   }
@@ -317,7 +320,7 @@ async function main() {
        membersType: "team", name: "mkbot", public: false, topicName: "test3", topicType: "chat",
     };
     const message = {
-      body: "beemo has been restarted ... but is still in development mode.  please do not @ me.  Now in TypeScript!",
+      body: `${botUsername} has been restarted ... but is still in development mode.  please do not @ me.  Now in TypeScript!`,
     };
 
     bot.chat.send(channel, message);
