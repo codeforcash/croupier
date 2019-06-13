@@ -28,38 +28,26 @@ interface ISnipe {
   betting_open: boolean;
 }
 
+"/cryptosnipe  +0.01XLM@croupier  "
+
 function processRefund(txn: Transaction, channel: ChatChannel): void {
 
   console.log("refunding txn", txn);
-
-  const txnDetailsApi: string = `https://horizon.stellar.org/transactions/${txn.txId}`;
-  axios.get(txnDetailsApi).then((response: AxiosResponse<any>) => {
-
-    // API returns a response, number of stroops
-    let transactionFees: number = parseFloat(response.data.fee_paid) * 0.0000001;
-    if (isNaN(transactionFees)) {
-      transactionFees = 300 * 0.0000001;
-    }
-
-    console.log("refunding txn fees", transactionFees);
-
-    const refund: number = _.round(txn.amount - transactionFees, 7);
-
-    console.log("total refund is", refund);
-
-    bot.wallet.send(txn.fromUsername, refund.toString()).then((refundTxn: Transaction) => {
-      let refundMsg: string = `\`\`\`+${refund}XLM@${txn.fromUsername}\`\`\` `;
-      refundMsg += ` :arrow_right: `;
-      refundMsg += `https://stellar.expert/explorer/public/tx/${refundTxn.txId}`;
-      bot.chat.send(channel, {
-        body: refundMsg,
-      });
-    }).catch((err) => {
-      console.log(err);
+  // API returns a response, number of stroops
+  let transactionFees: number = 300 * 0.0000001;
+  console.log("refunding txn fees", transactionFees);
+  const refund: number = _.round(txn.amount - transactionFees, 7);
+  console.log("total refund is", refund);
+  bot.wallet.send(txn.fromUsername, refund.toString()).then((refundTxn: Transaction) => {
+    let refundMsg: string = `\`\`\`+${refund}XLM@${txn.fromUsername}\`\`\` `;
+    refundMsg += ` :arrow_right: `;
+    refundMsg += `https://stellar.expert/explorer/public/tx/${refundTxn.txId}`;
+    bot.chat.send(channel, {
+      body: refundMsg,
     });
-
+  }).catch((err) => {
+    console.log(err);
   });
-
 }
 
 function extractTxn(msg: MessageSummary): void {
@@ -110,6 +98,7 @@ function processTxnDetails(txn: Transaction, channel: ChatChannel): void {
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   if (typeof(snipe) === "undefined") {
     processRefund(txn, channel);
+    return;
   }
   const isNative: boolean = txn.asset.type === "native";
   if (!isNative) {
@@ -139,22 +128,24 @@ const activeSnipes: object = {};
 
 function launchSnipe(wager: number, channel: ChatChannel): void {
   // Tell the channel: OK, your snipe has been accepted for routing.
+
+  let snipeTimeout: number = 60;
   let message: string = "The snipe is on.  ";
-  message += `Anybody is free to send me _exactly_ ${wager}XLM within 30 seconds: `;
+  message += `Anybody is free to send me _exactly_ ${wager}XLM within ${snipeTimeout} seconds: `;
   message += `\`\`\`+${wager}XLM@${botUsername}\`\`\``;
   message += `If there are not at >= 2 confirmed participants, the snipe is going `;
   message += `to be cancelled with deposits refunded, less transaction fess.`;
   bot.chat.send(channel, { body: message });
 
   bot.chat.send(channel, {
-    body: "Betting stops in 30 seconds",
+    body: `Betting stops in ${snipeTimeout} seconds`,
   }).then((sentMessage) => {
-    runClock(channel, sentMessage.id, 30);
+    runClock(channel, sentMessage.id, snipeTimeout);
   });
 
   setTimeout(() => {
     finalizeBets(channel);
-  }, 30 * 1000);
+  }, snipeTimeout * 1000);
 
   activeSnipes[JSON.stringify(channel)] = {
     betting_open: true,
@@ -210,7 +201,7 @@ function checkForSnipe(msg: MessageSummary): void {
   const msgText: string = msg.content.text.body;
 
   const wagerRegexString: string = "([0-9]+(?:[\\.][0-9]*)?|\\.[0-9]+)";
-  const cryptosnipeRegex: RegExp = new RegExp(`^\\/cryptosnipe\\s+\\+${wagerRegexString}XLM@${botUsername}`);
+  const cryptosnipeRegex: RegExp = new RegExp(`^\\/cryptosnipe\\s+\\+${wagerRegexString}XLM@${botUsername}`, 'i');
 
   const matchResults: RegExpMatchArray = msgText.match(cryptosnipeRegex);
   if (matchResults === null) {

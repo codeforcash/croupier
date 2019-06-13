@@ -36,7 +36,6 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 exports.__esModule = true;
-var axios_1 = require("axios");
 var _ = require("lodash");
 var os = require("os");
 var Bot = require("./keybase-bot");
@@ -46,28 +45,23 @@ var bot2 = new Bot(os.homedir());
 var botUsername = "croupier";
 var paperkey = process.env.CROUPIER_PAPERKEY_1;
 var paperkey2 = process.env.CROUPIER_PAPERKEY_2;
+"/cryptosnipe  +0.01XLM@croupier  ";
 function processRefund(txn, channel) {
     console.log("refunding txn", txn);
-    var txnDetailsApi = "https://horizon.stellar.org/transactions/" + txn.txId;
-    axios_1["default"].get(txnDetailsApi).then(function (response) {
-        // API returns a response, number of stroops
-        var transactionFees = parseFloat(response.data.fee_paid) * 0.0000001;
-        if (isNaN(transactionFees)) {
-            transactionFees = 300 * 0.0000001;
-        }
-        console.log("refunding txn fees", transactionFees);
-        var refund = _.round(txn.amount - transactionFees, 7);
-        console.log("total refund is", refund);
-        bot.wallet.send(txn.fromUsername, refund.toString()).then(function (refundTxn) {
-            var refundMsg = "```+" + refund + "XLM@" + txn.fromUsername + "``` ";
-            refundMsg += " :arrow_right: ";
-            refundMsg += "https://stellar.expert/explorer/public/tx/" + refundTxn.txId;
-            bot.chat.send(channel, {
-                body: refundMsg
-            });
-        })["catch"](function (err) {
-            console.log(err);
+    // API returns a response, number of stroops
+    var transactionFees = 300 * 0.0000001;
+    console.log("refunding txn fees", transactionFees);
+    var refund = _.round(txn.amount - transactionFees, 7);
+    console.log("total refund is", refund);
+    bot.wallet.send(txn.fromUsername, refund.toString()).then(function (refundTxn) {
+        var refundMsg = "```+" + refund + "XLM@" + txn.fromUsername + "``` ";
+        refundMsg += " :arrow_right: ";
+        refundMsg += "https://stellar.expert/explorer/public/tx/" + refundTxn.txId;
+        bot.chat.send(channel, {
+            body: refundMsg
         });
+    })["catch"](function (err) {
+        console.log(err);
     });
 }
 function extractTxn(msg) {
@@ -111,6 +105,7 @@ function processTxnDetails(txn, channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
     if (typeof (snipe) === "undefined") {
         processRefund(txn, channel);
+        return;
     }
     var isNative = txn.asset.type === "native";
     if (!isNative) {
@@ -138,20 +133,21 @@ function processTxnDetails(txn, channel) {
 var activeSnipes = {};
 function launchSnipe(wager, channel) {
     // Tell the channel: OK, your snipe has been accepted for routing.
+    var snipeTimeout = 60;
     var message = "The snipe is on.  ";
-    message += "Anybody is free to send me _exactly_ " + wager + "XLM within 30 seconds: ";
+    message += "Anybody is free to send me _exactly_ " + wager + "XLM within " + snipeTimeout + " seconds: ";
     message += "```+" + wager + "XLM@" + botUsername + "```";
     message += "If there are not at >= 2 confirmed participants, the snipe is going ";
     message += "to be cancelled with deposits refunded, less transaction fess.";
     bot.chat.send(channel, { body: message });
     bot.chat.send(channel, {
-        body: "Betting stops in 30 seconds"
+        body: "Betting stops in " + snipeTimeout + " seconds"
     }).then(function (sentMessage) {
-        runClock(channel, sentMessage.id, 30);
+        runClock(channel, sentMessage.id, snipeTimeout);
     });
     setTimeout(function () {
         finalizeBets(channel);
-    }, 30 * 1000);
+    }, snipeTimeout * 1000);
     activeSnipes[JSON.stringify(channel)] = {
         betting_open: true,
         participants: [],
@@ -202,7 +198,7 @@ function checkForSnipe(msg) {
     }
     var msgText = msg.content.text.body;
     var wagerRegexString = "([0-9]+(?:[\\.][0-9]*)?|\\.[0-9]+)";
-    var cryptosnipeRegex = new RegExp("^\\/cryptosnipe\\s+\\+" + wagerRegexString + "XLM@" + botUsername);
+    var cryptosnipeRegex = new RegExp("^\\/cryptosnipe\\s+\\+" + wagerRegexString + "XLM@" + botUsername, 'i');
     var matchResults = msgText.match(cryptosnipeRegex);
     if (matchResults === null) {
         bot.chat.send(msg.channel, {
