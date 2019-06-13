@@ -169,7 +169,7 @@ function launchSnipe(wager, channel) {
     activeSnipes[JSON.stringify(channel)] = {
         betting_open: true,
         participants: [],
-        wager: {}
+        wager: wager
     };
 }
 function finalizeBets(channel) {

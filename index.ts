@@ -170,7 +170,7 @@ function launchSnipe(wager: number, channel: ChatChannel): void {
   activeSnipes[JSON.stringify(channel)] = {
     betting_open: true,
     participants: [],
-    wager: {},
+    wager: wager,
   };
 }
 
