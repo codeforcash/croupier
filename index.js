@@ -74,41 +74,27 @@ function extractTxn(msg) {
     var txnId = msg.content.text.payments[0].result.sent;
     bot.wallet.details(txnId).then(function (details) { return processTxnDetails(details, msg.channel); });
 }
-function sendAmountToWinner(winnerUsername, wager, channel) {
+function sendAmountToWinner(winnerUsername, channel) {
     var txnDetailsApi;
     var transactionFees;
     var bounty;
     var thisTxnFee;
     var snipe = activeSnipes[JSON.stringify(channel)];
-    Promise.all(snipe.participants.map(function (participant) {
-        txnDetailsApi = "https://horizon.stellar.org/transactions/" + participant.transaction.txId;
-        return axios_1["default"].get(txnDetailsApi);
-    })).then(function (apiResponses) {
-        transactionFees = 0;
-        bounty = 0;
-        apiResponses.forEach(function (apiResponse) {
-            thisTxnFee = (parseFloat(apiResponse.data.fee_paid) * 0.0000001);
-            if (isNaN(thisTxnFee)) {
-                thisTxnFee = 300 * 0.0000001;
-            }
-            transactionFees += thisTxnFee;
-            bounty += snipe.wager;
-        });
-        bounty = _.round(bounty - transactionFees, 7);
-        bot.wallet.send(winnerUsername, bounty.toString()).then(function (txn) {
-            var bountyMsg = "```+" + bounty + "XLM@" + winnerUsername + "``` ";
-            bountyMsg += ":arrow_right: ";
-            bountyMsg += "https://stellar.expert/explorer/public/tx/" + txn.txId,
-                bot.chat.send(channel, {
-                    body: bountyMsg
-                });
-        });
+    bounty = snipe.participants.length * snipe.wager;
+    bounty -= (snipe.participants.length * 300 * 0.0000001);
+    bounty = _.round(bounty, 7);
+    bot.wallet.send(winnerUsername, bounty.toString()).then(function (txn) {
+        var bountyMsg = "```+" + bounty + "XLM@" + winnerUsername + "``` ";
+        bountyMsg += ":arrow_right: ";
+        bountyMsg += "https://stellar.expert/explorer/public/tx/" + txn.txId,
+            bot.chat.send(channel, {
+                body: bountyMsg
+            });
     });
 }
 function resolveFlip(channel, results) {
     var winnerUsername = results[0];
-    var snipe = activeSnipes[JSON.stringify(channel)];
-    sendAmountToWinner(winnerUsername, snipe.wager, channel);
+    sendAmountToWinner(winnerUsername, channel);
     bot.chat.send(channel, {
         body: "Congrats to @" + winnerUsername
     });
@@ -128,9 +114,12 @@ function processTxnDetails(txn, channel) {
     }
     var isNative = txn.asset.type === "native";
     if (!isNative) {
-        processRefund(txn, channel);
+        return;
     }
     if (txn.toUsername !== botUsername) {
+        return;
+    }
+    if (parseFloat(txn.amount) !== snipe.wager) {
         processRefund(txn, channel);
     }
     if (snipe.betting_open === false) {

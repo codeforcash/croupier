@@ -67,43 +67,30 @@ function extractTxn(msg: MessageSummary): void {
   bot.wallet.details(txnId).then((details) => processTxnDetails(details, msg.channel));
 }
 
-function sendAmountToWinner(winnerUsername: string, wager: number, channel: ChatChannel): void {
+function sendAmountToWinner(winnerUsername: string, channel: ChatChannel): void {
 
   let txnDetailsApi: string;
   let transactionFees: number;
   let bounty: number;
   let thisTxnFee: number;
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-  Promise.all(snipe.participants.map((participant) => {
-    txnDetailsApi = `https://horizon.stellar.org/transactions/${participant.transaction.txId}`;
-    return axios.get(txnDetailsApi);
-  })).then((apiResponses) => {
-     transactionFees = 0;
-     bounty = 0;
-     apiResponses.forEach((apiResponse: AxiosResponse) => {
-       thisTxnFee = (parseFloat(apiResponse.data.fee_paid) * 0.0000001);
-       if (isNaN(thisTxnFee)) {
-         thisTxnFee = 300 * 0.0000001;
-       }
-       transactionFees += thisTxnFee;
-       bounty += snipe.wager;
-     });
-     bounty = _.round(bounty - transactionFees, 7);
-     bot.wallet.send(winnerUsername, bounty.toString()).then((txn) => {
-       let bountyMsg: string = `\`\`\`+${bounty}XLM@${winnerUsername}\`\`\` `;
-       bountyMsg += `:arrow_right: `;
-       bountyMsg += `https://stellar.expert/explorer/public/tx/${txn.txId}`,
-       bot.chat.send(channel, {
-        body: bountyMsg,
-      });
+
+  bounty = snipe.participants.length * snipe.wager;
+  bounty -= (snipe.participants.length * 300 * 0.0000001);
+  bounty = _.round(bounty, 7);
+  bot.wallet.send(winnerUsername, bounty.toString()).then((txn) => {
+    let bountyMsg: string = `\`\`\`+${bounty}XLM@${winnerUsername}\`\`\` `;
+    bountyMsg += `:arrow_right: `;
+    bountyMsg += `https://stellar.expert/explorer/public/tx/${txn.txId}`,
+    bot.chat.send(channel, {
+      body: bountyMsg,
     });
   });
 }
 
 function resolveFlip(channel: ChatChannel, results: Array<string>): void {
   const winnerUsername: string = results[0];
-  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-  sendAmountToWinner(winnerUsername, snipe.wager, channel);
+  sendAmountToWinner(winnerUsername, channel);
   bot.chat.send(channel, {
     body: `Congrats to @${winnerUsername}`,
   });
@@ -126,9 +113,12 @@ function processTxnDetails(txn: Transaction, channel: ChatChannel): void {
   }
   const isNative: boolean = txn.asset.type === "native";
   if (!isNative) {
-    processRefund(txn, channel);
+    return;
   }
   if (txn.toUsername !== botUsername) {
+    return;
+  }
+  if (parseFloat(txn.amount) !== snipe.wager) {
     processRefund(txn, channel);
   }
   if (snipe.betting_open === false) {
