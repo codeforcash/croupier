@@ -8,14 +8,12 @@ import * as Bot from "./keybase-bot";
 
 import "source-map-support/register";
 
-const bot = new Bot(os.homedir());
-const bot2 = new Bot(os.homedir());
+const bot: Bot = new Bot(os.homedir());
+const bot2: Bot = new Bot(os.homedir());
 
-const botUsername = "croupier";
-const paperkey = process.env.CROUPIER_PAPERKEY_1;
-const paperkey2 = process.env.CROUPIER_PAPERKEY_2;
-
-const isNumber = (value) => !Number.isNaN(parseFloat(value));
+const botUsername: string = "croupier";
+const paperkey: string = process.env.CROUPIER_PAPERKEY_1;
+const paperkey2: string = process.env.CROUPIER_PAPERKEY_2;
 
 import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
 
@@ -27,28 +25,32 @@ interface IParticipant {
 interface ISnipe {
   wager: number;
   participants: Array<IParticipant>;
+  betting_open: boolean;
 }
 
 function processRefund(txn: Transaction, channel: ChatChannel): void {
 
   console.log("refunding txn", txn);
 
-  const txnDetailsApi = `https://horizon.stellar.org/transactions/${txn.txId}`;
-  axios.get(txnDetailsApi).then((response) => {
+  const txnDetailsApi: string = `https://horizon.stellar.org/transactions/${txn.txId}`;
+  axios.get(txnDetailsApi).then((response: AxiosResponse<any>) => {
 
     // API returns a response, number of stroops
-    const transactionFees = parseFloat(response.data.fee_paid) * 0.0000001;
+    let transactionFees: number = parseFloat(response.data.fee_paid) * 0.0000001;
+    if (isNaN(transactionFees)) {
+      transactionFees = 300 * 0.0000001;
+    }
 
     console.log("refunding txn fees", transactionFees);
 
-    const refund = _.round(txn.amount - transactionFees, 7);
+    const refund: number = _.round(txn.amount - transactionFees, 7);
 
     console.log("total refund is", refund);
 
-    bot.wallet.send(txn.fromUsername, refund.toString()).then((refundTxn) => {
-      let refundMsg = `\`\`\`+${refund}XLM@${txn.fromUsername}\`\`\` `;
+    bot.wallet.send(txn.fromUsername, refund.toString()).then((refundTxn: Transaction) => {
+      let refundMsg: string = `\`\`\`+${refund}XLM@${txn.fromUsername}\`\`\` `;
       refundMsg += ` :arrow_right: `;
-      refundMsg += `\`https://stellar.expert/explorer/public/tx/${refundTxn.txId}\``;
+      refundMsg += `https://stellar.expert/explorer/public/tx/${refundTxn.txId}`;
       bot.chat.send(channel, {
         body: refundMsg,
       });
@@ -61,16 +63,17 @@ function processRefund(txn: Transaction, channel: ChatChannel): void {
 }
 
 function extractTxn(msg: MessageSummary): void {
-  const txnId = msg.content.text.payments[0].result.sent;
+  const txnId: string = msg.content.text.payments[0].result.sent;
   bot.wallet.details(txnId).then((details) => processTxnDetails(details, msg.channel));
 }
 
 function sendAmountToWinner(winnerUsername: string, wager: number, channel: ChatChannel): void {
 
-  let txnDetailsApi;
-  let transactionFees;
-  let bounty;
-  const snipe = activeSnipes[JSON.stringify(channel)];
+  let txnDetailsApi: string;
+  let transactionFees: number;
+  let bounty: number;
+  let thisTxnFee: number;
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   Promise.all(snipe.participants.map((participant) => {
     txnDetailsApi = `https://horizon.stellar.org/transactions/${participant.transaction.txId}`;
     return axios.get(txnDetailsApi);
@@ -78,14 +81,18 @@ function sendAmountToWinner(winnerUsername: string, wager: number, channel: Chat
      transactionFees = 0;
      bounty = 0;
      apiResponses.forEach((apiResponse: AxiosResponse) => {
-       transactionFees += (parseFloat(apiResponse.data.fee_paid) * 0.0000001);
+       thisTxnFee = (parseFloat(apiResponse.data.fee_paid) * 0.0000001);
+       if (isNaN(thisTxnFee)) {
+         thisTxnFee = 300 * 0.0000001;
+       }
+       transactionFees += thisTxnFee;
        bounty += snipe.wager;
      });
      bounty = _.round(bounty - transactionFees, 7);
      bot.wallet.send(winnerUsername, bounty.toString()).then((txn) => {
-       let bountyMsg = `\`\`\`+${bounty}XLM@${winnerUsername}\`\`\` `;
+       let bountyMsg: string = `\`\`\`+${bounty}XLM@${winnerUsername}\`\`\` `;
        bountyMsg += `:arrow_right: `;
-       bountyMsg += `\`https://stellar.expert/explorer/public/tx/${txn.txId}\``,
+       bountyMsg += `https://stellar.expert/explorer/public/tx/${txn.txId}`,
        bot.chat.send(channel, {
         body: bountyMsg,
       });
@@ -94,16 +101,16 @@ function sendAmountToWinner(winnerUsername: string, wager: number, channel: Chat
 }
 
 function resolveFlip(channel: ChatChannel, results: Array<string>): void {
-  const winnerUsername = results[0];
-  const snipe = activeSnipes[JSON.stringify(channel)];
+  const winnerUsername: string = results[0];
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   sendAmountToWinner(winnerUsername, snipe.wager, channel);
-  bot.chat.send(JSON.parse(snipe.channel), {
+  bot.chat.send(channel, {
     body: `Congrats to @${winnerUsername}`,
   });
 }
 
 function flip(channel: ChatChannel): void {
-  const flipParticipants = activeSnipes[JSON.stringify(channel)].participants.map((el) => {
+  const flipParticipants: Array<string> = activeSnipes[JSON.stringify(channel)].participants.map((el) => {
     return el.username;
   }).join(", ");
 
@@ -113,16 +120,16 @@ function flip(channel: ChatChannel): void {
 }
 
 function processTxnDetails(txn: Transaction, channel: ChatChannel): void {
-  const snipe = activeSnipes[JSON.stringify(channel)];
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   if (typeof(snipe) === "undefined") {
-    return;
+    processRefund(txn, channel);
   }
-  const isNative = txn.asset.type === "native";
+  const isNative: boolean = txn.asset.type === "native";
   if (!isNative) {
-    return;
+    processRefund(txn, channel);
   }
   if (txn.toUsername !== botUsername) {
-    return;
+    processRefund(txn, channel);
   }
   if (snipe.betting_open === false) {
     processRefund(txn, channel);
@@ -138,14 +145,14 @@ function processTxnDetails(txn: Transaction, channel: ChatChannel): void {
 
 }
 
-const activeSnipes = {};
+const activeSnipes: object = {};
 
 function launchSnipe(wager: number, channel: ChatChannel): void {
   // Tell the channel: OK, your snipe has been accepted for routing.
-  let message = "The snipe is on.  ";
+  let message: string = "The snipe is on.  ";
   message += `Anybody is free to send me _exactly_ ${wager}XLM within 30 seconds: `;
-  message += `\`\`\`+${wager}XLM@${botUsername}\`\`\`.`;
-  message += ` If there are not at >= 2 confirmed participants, the snipe is going `;
+  message += `\`\`\`+${wager}XLM@${botUsername}\`\`\``;
+  message += `If there are not at >= 2 confirmed participants, the snipe is going `;
   message += `to be cancelled with deposits refunded, less transaction fess.`;
   bot.chat.send(channel, { body: message });
 
@@ -178,7 +185,7 @@ function finalizeBets(channel: ChatChannel): void {
 }
 
 function executeFlipOrCancel(channel: ChatChannel): void {
-  const snipe = activeSnipes[JSON.stringify(channel)];
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   if (typeof(snipe) !== "undefined") {
     if (snipe.participants.length > 1) {
       flip(channel);
@@ -210,27 +217,28 @@ function checkForSnipe(msg: MessageSummary): void {
     return;
   }
 
-  const msgText = msg.content.text.body;
+  const msgText: string = msg.content.text.body;
 
-  const cryptosnipeRegex = new RegExp(`^\\/cryptosnipe\\s+\\+([0-9]+(?:[\\.][0-9]*)?|\\.[0-9]+)XLM@${botUsername}`);
+  const wagerRegexString: string = "([0-9]+(?:[\\.][0-9]*)?|\\.[0-9]+)";
+  const cryptosnipeRegex: RegExp = new RegExp(`^\\/cryptosnipe\\s+\\+${wagerRegexString}XLM@${botUsername}`);
 
-  const matchResults = msgText.match(cryptosnipeRegex);
+  const matchResults: RegExpMatchArray = msgText.match(cryptosnipeRegex);
   if (matchResults === null) {
     bot.chat.send(msg.channel, {
       body: `Format is: \`\`\`/cryptosnipe +0.005XLM@${botUsername}\`\`\``,
     });
     return;
   }
-  const wager = parseFloat(matchResults[1]);
-  if (!isNumber(wager)) {
+  const wager: number = parseFloat(matchResults[1]);
+  if (Number.isNaN(wager)) {
     bot.chat.send(msg.channel, {
       body: "Wager must be in decimal format",
     });
     return;
   }
-  if (wager <= 0) {
+  if (wager < 0.0001) {
     bot.chat.send(msg.channel, {
-      body: "Wager must be a positive amount",
+      body: "Wager must >= 0.0001XLM",
     });
     return;
   }
@@ -244,7 +252,7 @@ function checkForSnipe(msg: MessageSummary): void {
   launchSnipe(wager, msg.channel);
 }
 
-function cancelFlip(conversationId: string, channel: ChatChannel, err): void {
+function cancelFlip(conversationId: string, channel: ChatChannel, err: Error): void {
   clearInterval(flipMonitorIntervals[conversationId]);
   bot.chat.send(channel, {
     body: `The flip has been cancelled due to error,
@@ -258,7 +266,7 @@ function cancelFlip(conversationId: string, channel: ChatChannel, err): void {
 }
 
 // Something to consider paging to disk or network
-const flipMonitorIntervals = {};
+const flipMonitorIntervals: object = {};
 
 function monitorFlipResults(msg: MessageSummary): void {
 
@@ -282,10 +290,10 @@ function monitorFlipResults(msg: MessageSummary): void {
   }), 1000);
 }
 
-const allClocks = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].reverse();
-const runningClocks = {};
+const allClocks: Array<number> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].reverse();
+const runningClocks: object = {};
 
-function runClock(channel, messageId, seconds) {
+function runClock(channel: ChatChannel, messageId: string, seconds: number): void {
   bot.chat.edit(channel, messageId, {
     message: {
       body: ":clock" + allClocks[seconds % 12].toString() + ":" + ` betting stops in ${seconds}s`,
@@ -307,20 +315,19 @@ function runClock(channel, messageId, seconds) {
   }
 }
 
-async function main() {
+async function main(): Promise<any> {
   try {
     await bot.init(botUsername, paperkey);
-    const info = bot.myInfo();
-    console.log(`Bot initialized with username ${info.username}.`);
+    console.log(`Bot initialized with username ${botUsername}.`);
     await bot2.init(botUsername, paperkey2);
     console.log("Second key initialized");
     console.log("Listening for all messages...");
 
-    const channel = {
+    const channel: object = {
        membersType: "team", name: "mkbot", public: false, topicName: "test3", topicType: "chat",
     };
-    const message = {
-      body: `${botUsername} has been restarted ... but is still in development mode.  please do not @ me.  Now in TypeScript!`,
+    const message: object = {
+      body: `${botUsername} was just restarted...[development mode] [use at own risk].  Now in TypeScript!`,
     };
 
     bot.chat.send(channel, message);
@@ -349,7 +356,7 @@ async function main() {
   }
 }
 
-async function shutDown() {
+async function shutDown(): Promise<any> {
   await bot.deinit();
   await bot2.deinit();
   process.exit();

@@ -46,20 +46,22 @@ var bot2 = new Bot(os.homedir());
 var botUsername = "croupier";
 var paperkey = process.env.CROUPIER_PAPERKEY_1;
 var paperkey2 = process.env.CROUPIER_PAPERKEY_2;
-var isNumber = function (value) { return !Number.isNaN(parseFloat(value)); };
 function processRefund(txn, channel) {
     console.log("refunding txn", txn);
     var txnDetailsApi = "https://horizon.stellar.org/transactions/" + txn.txId;
     axios_1["default"].get(txnDetailsApi).then(function (response) {
         // API returns a response, number of stroops
         var transactionFees = parseFloat(response.data.fee_paid) * 0.0000001;
+        if (isNaN(transactionFees)) {
+            transactionFees = 300 * 0.0000001;
+        }
         console.log("refunding txn fees", transactionFees);
         var refund = _.round(txn.amount - transactionFees, 7);
         console.log("total refund is", refund);
         bot.wallet.send(txn.fromUsername, refund.toString()).then(function (refundTxn) {
             var refundMsg = "```+" + refund + "XLM@" + txn.fromUsername + "``` ";
             refundMsg += " :arrow_right: ";
-            refundMsg += "`https://stellar.expert/explorer/public/tx/" + refundTxn.txId + "`";
+            refundMsg += "https://stellar.expert/explorer/public/tx/" + refundTxn.txId;
             bot.chat.send(channel, {
                 body: refundMsg
             });
@@ -76,6 +78,7 @@ function sendAmountToWinner(winnerUsername, wager, channel) {
     var txnDetailsApi;
     var transactionFees;
     var bounty;
+    var thisTxnFee;
     var snipe = activeSnipes[JSON.stringify(channel)];
     Promise.all(snipe.participants.map(function (participant) {
         txnDetailsApi = "https://horizon.stellar.org/transactions/" + participant.transaction.txId;
@@ -84,14 +87,18 @@ function sendAmountToWinner(winnerUsername, wager, channel) {
         transactionFees = 0;
         bounty = 0;
         apiResponses.forEach(function (apiResponse) {
-            transactionFees += (parseFloat(apiResponse.data.fee_paid) * 0.0000001);
+            thisTxnFee = (parseFloat(apiResponse.data.fee_paid) * 0.0000001);
+            if (isNaN(thisTxnFee)) {
+                thisTxnFee = 300 * 0.0000001;
+            }
+            transactionFees += thisTxnFee;
             bounty += snipe.wager;
         });
         bounty = _.round(bounty - transactionFees, 7);
         bot.wallet.send(winnerUsername, bounty.toString()).then(function (txn) {
             var bountyMsg = "```+" + bounty + "XLM@" + winnerUsername + "``` ";
             bountyMsg += ":arrow_right: ";
-            bountyMsg += "`https://stellar.expert/explorer/public/tx/" + txn.txId + "`",
+            bountyMsg += "https://stellar.expert/explorer/public/tx/" + txn.txId,
                 bot.chat.send(channel, {
                     body: bountyMsg
                 });
@@ -102,7 +109,7 @@ function resolveFlip(channel, results) {
     var winnerUsername = results[0];
     var snipe = activeSnipes[JSON.stringify(channel)];
     sendAmountToWinner(winnerUsername, snipe.wager, channel);
-    bot.chat.send(JSON.parse(snipe.channel), {
+    bot.chat.send(channel, {
         body: "Congrats to @" + winnerUsername
     });
 }
@@ -117,14 +124,14 @@ function flip(channel) {
 function processTxnDetails(txn, channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
     if (typeof (snipe) === "undefined") {
-        return;
+        processRefund(txn, channel);
     }
     var isNative = txn.asset.type === "native";
     if (!isNative) {
-        return;
+        processRefund(txn, channel);
     }
     if (txn.toUsername !== botUsername) {
-        return;
+        processRefund(txn, channel);
     }
     if (snipe.betting_open === false) {
         processRefund(txn, channel);
@@ -144,8 +151,8 @@ function launchSnipe(wager, channel) {
     // Tell the channel: OK, your snipe has been accepted for routing.
     var message = "The snipe is on.  ";
     message += "Anybody is free to send me _exactly_ " + wager + "XLM within 30 seconds: ";
-    message += "```+" + wager + "XLM@" + botUsername + "```.";
-    message += " If there are not at >= 2 confirmed participants, the snipe is going ";
+    message += "```+" + wager + "XLM@" + botUsername + "```";
+    message += "If there are not at >= 2 confirmed participants, the snipe is going ";
     message += "to be cancelled with deposits refunded, less transaction fess.";
     bot.chat.send(channel, { body: message });
     bot.chat.send(channel, {
@@ -205,7 +212,8 @@ function checkForSnipe(msg) {
         return;
     }
     var msgText = msg.content.text.body;
-    var cryptosnipeRegex = new RegExp("^/cryptosnipe +([0-9]+(?:[.][0-9]*)?|.[0-9]+)XLM@" + botUsername);
+    var wagerRegexString = "([0-9]+(?:[\\.][0-9]*)?|\\.[0-9]+)";
+    var cryptosnipeRegex = new RegExp("^\\/cryptosnipe\\s+\\+" + wagerRegexString + "XLM@" + botUsername);
     var matchResults = msgText.match(cryptosnipeRegex);
     if (matchResults === null) {
         bot.chat.send(msg.channel, {
@@ -214,15 +222,15 @@ function checkForSnipe(msg) {
         return;
     }
     var wager = parseFloat(matchResults[1]);
-    if (!isNumber(wager)) {
+    if (Number.isNaN(wager)) {
         bot.chat.send(msg.channel, {
             body: "Wager must be in decimal format"
         });
         return;
     }
-    if (wager <= 0) {
+    if (wager < 0.0001) {
         bot.chat.send(msg.channel, {
-            body: "Wager must be a positive amount"
+            body: "Wager must >= 0.0001XLM"
         });
         return;
     }
@@ -288,7 +296,7 @@ function runClock(channel, messageId, seconds) {
 }
 function main() {
     return __awaiter(this, void 0, void 0, function () {
-        var info, channel, message, error_1;
+        var channel, message, error_1;
         var _this = this;
         return __generator(this, function (_a) {
             switch (_a.label) {
@@ -297,8 +305,7 @@ function main() {
                     return [4 /*yield*/, bot.init(botUsername, paperkey)];
                 case 1:
                     _a.sent();
-                    info = bot.myInfo();
-                    console.log("Bot initialized with username " + info.username + ".");
+                    console.log("Bot initialized with username " + botUsername + ".");
                     return [4 /*yield*/, bot2.init(botUsername, paperkey2)];
                 case 2:
                     _a.sent();
@@ -308,7 +315,7 @@ function main() {
                         membersType: "team", name: "mkbot", public: false, topicName: "test3", topicType: "chat"
                     };
                     message = {
-                        body: botUsername + " has been restarted ... but is still in development mode.  please do not @ me.  Now in TypeScript!"
+                        body: botUsername + " was just restarted...[development mode] [use at own risk].  Now in TypeScript!"
                     };
                     bot.chat.send(channel, message);
                     return [4 /*yield*/, bot.chat.watchAllChannelsForNewMessages(function (msg) { return __awaiter(_this, void 0, void 0, function () {
