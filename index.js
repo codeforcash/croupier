@@ -74,9 +74,16 @@ function sendAmountToWinner(winnerUsername, channel) {
     var bounty;
     var thisTxnFee;
     var snipe = activeSnipes[JSON.stringify(channel)];
+    console.log(snipe.participants.length, snipe.wager);
     bounty = snipe.participants.length * snipe.wager;
+    console.log("now times.");
+    console.log(bounty);
     bounty -= (snipe.participants.length * 300 * 0.0000001);
+    console.log("now minus");
+    console.log(bounty);
     bounty = _.round(bounty, 7);
+    console.log("now rounded");
+    console.log(bounty);
     bot.wallet.send(winnerUsername, bounty.toString()).then(function (txn) {
         var bountyMsg = "```+" + bounty + "XLM@" + winnerUsername + "``` ";
         bountyMsg += ":arrow_right: ";
@@ -102,8 +109,14 @@ function flip(channel) {
     });
 }
 function processTxnDetails(txn, channel) {
+    if (txn.toUsername !== botUsername) {
+        return;
+    }
     var snipe = activeSnipes[JSON.stringify(channel)];
     if (typeof (snipe) === "undefined") {
+        bot.chat.send(channel, {
+            body: "No active snipe found - refunding."
+        });
         processRefund(txn, channel);
         return;
     }
@@ -111,14 +124,19 @@ function processTxnDetails(txn, channel) {
     if (!isNative) {
         return;
     }
-    if (txn.toUsername !== botUsername) {
+    if (parseFloat(txn.amount) !== snipe.wager) {
+        bot.chat.send(channel, {
+            body: "Amount you sent " + txn.amount + " is not the same as snipe wager " + snipe.wager + " - refunding."
+        });
+        processRefund(txn, channel);
         return;
     }
-    if (parseFloat(txn.amount) !== snipe.wager) {
-        processRefund(txn, channel);
-    }
     if (snipe.betting_open === false) {
+        bot.chat.send(channel, {
+            body: "Betting has closed - refunding"
+        });
         processRefund(txn, channel);
+        return;
     }
     else {
         activeSnipes[JSON.stringify(channel)].participants.push({
