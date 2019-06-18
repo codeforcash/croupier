@@ -331,6 +331,7 @@ function main() {
                         body: botUsername + " was just restarted...[development mode] [use at own risk].  Now in TypeScript!"
                     };
                     bot.chat.send(channel, message);
+                    bot.chat.sendMoneyInChat('test3', 'mkbot', 0.01, 'dxb');
                     return [4 /*yield*/, bot.chat.watchAllChannelsForNewMessages(function (msg) { return __awaiter(_this, void 0, void 0, function () {
                             return __generator(this, function (_a) {
                                 try {

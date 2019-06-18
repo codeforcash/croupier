@@ -650,15 +650,14 @@ class Chat extends ClientBase {
 
   async sendMoneyInChat(channel, team, amount, recipient) {
 
-    const child = child_process.spawn('expect', ['-c',
+    const child = child_process.spawn('bash', {
+      shell: true
+    });
 
-      `spawn keybase chat send --channel ${channel} ${team} "+${amount}XLM@${recipient}" ; expect "if you are sure" ; send -- "sendmoney\r" ; expect eof`
-
-     ]);
     const stdOutBuffer = [];
     const stdErrBuffer = [];
 
-    child.stdin.end();
+    child.stdin.end(`expect -c 'spawn keybase chat send --channel ${channel} ${team} "+${amount}XLM@${recipient}" ; expect "if you are sure" ; send -- "sendmoney\r" ; expect eof'`);
     const lineReaderStdout = readline.createInterface({
       input: child.stdout
     }); // Use readline interface to parse each line (\n separated) when provided
