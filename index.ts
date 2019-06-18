@@ -196,7 +196,7 @@ function processTxnDetails(txn: Transaction, channel: ChatChannel): void {
 
 function resetSnipeClock(channel) {
 
-  let snipeTimeout: number = 10;
+  let snipeTimeout: number = 60;
   clearTimeout(activeSnipes[JSON.stringify(channel)].timeout);
   bot.chat.delete(channel, activeSnipes[JSON.stringify(channel)].clock, {});
   bot.chat.send(channel, {
@@ -217,7 +217,7 @@ const activeSnipes: object = {};
 function launchSnipe(channel: ChatChannel): void {
   // Tell the channel: OK, your snipe has been accepted for routing.
 
-  let snipeTimeout: number = 10;
+  let snipeTimeout: number = 60;
   let message: string = "The snipe is on.  Bet in multiples of 0.01XLM.  Betting format:";
   message += `\`\`\`+1.01XLM@${botUsername}\`\`\``;
 
