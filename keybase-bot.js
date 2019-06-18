@@ -168,6 +168,12 @@ function formatAPIObjectOutput(obj, context) {
   }
 }
 
+
+
+
+
+
+
 const keybaseExec = (workingDir, homeDir, args, options = {
   stdinBuffer: undefined,
   onStdOut: undefined,
@@ -640,6 +646,58 @@ class ClientBase {
 
 /** The chat module of your Keybase bot. For more info about the API this module uses, you may want to check out `keybase chat api`. */
 class Chat extends ClientBase {
+
+
+  async sendMoneyInChat(channel, team, amount, recipient) {
+
+    const child = child_process.spawn('expect', ['-c',
+
+      `spawn keybase chat send --channel ${channel} ${team} "+${amount}XLM@${recipient}" ; expect "if you are sure" ; send -- "sendmoney\r" ; expect eof`
+
+     ]);
+    const stdOutBuffer = [];
+    const stdErrBuffer = [];
+
+    child.stdin.end();
+    const lineReaderStdout = readline.createInterface({
+      input: child.stdout
+    }); // Use readline interface to parse each line (\n separated) when provided
+    // with onStdOut callback
+
+    child.stdout.on('data', chunk => {
+      stdOutBuffer.push(chunk);
+    });
+
+    child.stderr.on('data', chunk => {
+      stdErrBuffer.push(chunk);
+    });
+    let done = false;
+
+    return new Promise((resolve, reject) => {
+      child.on('close', code => {
+        done = true;
+        let finalStdOut = null; // Pass back
+
+        if (code) {
+          const errorMessage = Buffer.concat(stdErrBuffer).toString('utf8');
+          reject(new Error(errorMessage));
+        } else {
+          const stdout = Buffer.concat(stdOutBuffer).toString('utf8');
+
+          try {
+            finalStdOut = stdout;
+          } catch (e) {
+            reject(e);
+          }
+        }
+
+        resolve(finalStdOut);
+      });
+    });
+
+
+  };
+
   /**
    * Lists your chats, with info on which ones have unread messages.
    * @memberof Chat
