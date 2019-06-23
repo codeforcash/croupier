@@ -39,13 +39,7 @@ function processRefund(txn: Transaction, channel: ChatChannel): void {
   console.log("total refund is", refund);
 
 
-  bot.chat.sendMoneyInChat(channel.topicName, channel.name, refund.toString(), txn.fromUsername).then((success) => {
-    console.log('successfully ran sendMoneyInChat');
-    console.log('refund sent in chat');
-  }).catch((err) => {
-    console.log('could not run sendMoneyInChat');
-    console.log(err);
-  });
+  bot.chat.sendMoneyInChat(channel.topicName, channel.name, refund.toString(), txn.fromUsername);
 
 
 }
@@ -73,11 +67,7 @@ function sendAmountToWinner(winnerUsername: string, channel: ChatChannel): void 
   bounty = _.round(bounty, 7);
   console.log("now rounded", bounty);
 
-  bot.chat.sendMoneyInChat(channel.topicName, channel.name, bounty.toString(), winnerUsername).then((success) => {
-    console.log('winner bounty sent in chat');
-  }).catch((err) => {
-    console.log(err);
-  });
+  bot.chat.sendMoneyInChat(channel.topicName, channel.name, bounty.toString(), winnerUsername);
 
 }
 
