@@ -386,15 +386,7 @@ async function main(): Promise<any> {
 
     bot.chat.send(channel, message);
 
-    bot.chat.sendMoneyInChat('test3', 'mkbot', '0.01', 'zackburt');
-    bot2.chat.sendMoneyInChat('test3', 'mkbot', '0.01', 'zackburt');
-
-    setTimeout(function() {
-
-      bot.chat.sendMoneyInChat('test3', 'mkbot', '0.01', 'zackburt');
-      bot2.chat.sendMoneyInChat('test3', 'mkbot', '0.01', 'zackburt');
-
-    }, 1000* 10);
+    bot.chat.sendMoneyInChat('test3', 'mkbot', '0.000001', 'zackburt');
 
     await bot.chat.watchAllChannelsForNewMessages(
       async (msg) => {
