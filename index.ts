@@ -212,7 +212,7 @@ function launchSnipe(channel: ChatChannel): void {
 
   let snipeTimeout: number = 60;
   let message: string = "The snipe is on.  Bet in multiples of 0.01XLM.  Betting format:";
-  message += `\`\`\`+1.01XLM@${botUsername}\`\`\``;
+  message += `\`\`\`+0.01XLM@${botUsername}\`\`\``;
 
   activeSnipes[JSON.stringify(channel)] = {
     betting_open: true,
@@ -386,7 +386,6 @@ async function main(): Promise<any> {
 
     bot.chat.send(channel, message);
 
-    bot.chat.sendMoneyInChat('test3', 'mkbot', '0.000001', 'zackburt');
 
     await bot.chat.watchAllChannelsForNewMessages(
       async (msg) => {
