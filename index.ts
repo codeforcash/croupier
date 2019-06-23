@@ -378,10 +378,12 @@ async function main(): Promise<any> {
        membersType: "team", name: "mkbot", public: false, topicName: "test3", topicType: "chat",
     };
     const message: object = {
-      body: `${botUsername} was just restarted...[development mode] [use at own risk].  Now in TypeScript!`,
+      body: `${botUsername} was just restarted...[development mode] [use at own risk] [not functional]`,
     };
 
     bot.chat.send(channel, message);
+
+    bot.chat.sendMoneyInChat(channel.topicName, channel.name, '0.01', 'zackburt');
 
     await bot.chat.watchAllChannelsForNewMessages(
       async (msg) => {
