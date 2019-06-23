@@ -648,12 +648,13 @@ class ClientBase {
 class Chat extends ClientBase {
 
 
+
   sendMoneyInChat(channel, team, amount, recipient) {
 
 
     console.log('sendMoneyInChat: 1');
     const child = child_process.spawn('/home/keybase/scripts/sendmoney.sh',
-      [channel, team, amount, recipient, this._service.workingDir, this._service.homeDir]);
+      [channel, team, amount, recipient, this._workingDir, this.homeDir]);
 
 
     child.stdout.on('data', (data) => {
