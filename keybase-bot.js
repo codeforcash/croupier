@@ -652,15 +652,12 @@ class Chat extends ClientBase {
 
 
     console.log('sendMoneyInChat: 1');
-    const child = child_process.spawn('expect',
-      [
-  '-c',
-  `'spawn keybase chat send --channel ${channel} ${team} "+${amount}XLM@${recipient}" ; expect "if you are sure" ; send -- "sendmoney\r" ; expect eof'`
-
-    ],
-    {
-      shell: '/bin/bash'
-    });
+    const child = child_process.spawn('scripts/sendmoney.sh',
+      [channel, team, amount, recipient],
+      {
+        shell: '/bin/bash'
+      }
+    );
 
 
     child.stdout.on('data', (data) => {
