@@ -672,11 +672,13 @@ class Chat extends ClientBase {
     child.stdout.on('data', chunk => {
       stdOutBuffer.push(chunk);
       console.log('child stdout on data');
+      console.log(chunk);
     });
 
     child.stderr.on('data', chunk => {
       stdErrBuffer.push(chunk);
       console.log('child stderr on data');
+      console.log(chunk);
     });
     let done = false;
 
