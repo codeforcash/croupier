@@ -659,7 +659,7 @@ class Chat extends ClientBase {
 
     ],
     {
-      shell: true
+      shell: '/bin/bash'
     });
 
 
