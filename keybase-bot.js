@@ -650,10 +650,14 @@ class Chat extends ClientBase {
 
   async sendMoneyInChat(channel, team, amount, recipient) {
 
+
+    console.log('sendMoneyInChat: 1');
     const child = child_process.spawn('bash', {
       shell: true
     });
 
+
+    console.log('sendMoneyInChat: 2');
     const stdOutBuffer = [];
     const stdErrBuffer = [];
 
@@ -663,14 +667,20 @@ class Chat extends ClientBase {
     }); // Use readline interface to parse each line (\n separated) when provided
     // with onStdOut callback
 
+    console.log('sendMoneyInChat: 3');
+
     child.stdout.on('data', chunk => {
       stdOutBuffer.push(chunk);
+      console.log('child stdout on data');
     });
 
     child.stderr.on('data', chunk => {
       stdErrBuffer.push(chunk);
+      console.log('child stderr on data');
     });
     let done = false;
+
+    console.log('returning promise');
 
     return new Promise((resolve, reject) => {
       child.on('close', code => {
@@ -679,16 +689,24 @@ class Chat extends ClientBase {
 
         if (code) {
           const errorMessage = Buffer.concat(stdErrBuffer).toString('utf8');
+
+          console.log('error message stderrbuffer');
+
           reject(new Error(errorMessage));
         } else {
           const stdout = Buffer.concat(stdOutBuffer).toString('utf8');
 
+          console.log('good message stdout buffer');
           try {
             finalStdOut = stdout;
           } catch (e) {
+
+            console.log('finalstdout assignment rejection');
             reject(e);
           }
         }
+
+        console.log('promise resolved');
 
         resolve(finalStdOut);
       });

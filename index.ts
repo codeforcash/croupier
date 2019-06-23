@@ -40,8 +40,10 @@ function processRefund(txn: Transaction, channel: ChatChannel): void {
 
 
   bot.chat.sendMoneyInChat(channel.topicName, channel.name, refund.toString(), txn.fromUsername).then((success) => {
+    console.log('successfully ran sendMoneyInChat');
     console.log('refund sent in chat');
   }).catch((err) => {
+    console.log('could not run sendMoneyInChat');
     console.log(err);
   });
 
@@ -72,7 +74,7 @@ function sendAmountToWinner(winnerUsername: string, channel: ChatChannel): void 
   console.log("now rounded", bounty);
 
   bot.chat.sendMoneyInChat(channel.topicName, channel.name, bounty.toString(), winnerUsername).then((success) => {
-    console.log('refund sent in chat');
+    console.log('winner bounty sent in chat');
   }).catch((err) => {
     console.log(err);
   });
@@ -173,6 +175,7 @@ function processTxnDetails(txn: Transaction, channel: ChatChannel): void {
 
   }
 
+  console.log('betting_open 178');
   if (snipe.betting_open === false) {
     bot.chat.send(channel, {
       body: `Betting has closed - refunding`,
@@ -248,6 +251,8 @@ function finalizeBets(channel: ChatChannel): void {
   bot.chat.send(channel, {
     body: "No more bets!",
   });
+
+  console.log('betting_open 255');
   activeSnipes[JSON.stringify(channel)].betting_open = false;
    // Give 5 seconds to finalize transactions + 1 extra.
   setTimeout(() => {
@@ -291,6 +296,14 @@ function cancelFlip(conversationId: string, channel: ChatChannel, err: Error): v
   activeSnipes[JSON.stringify(channel)] = undefined;
 }
 
+function documentSnipe(channel: ChatChannel) {
+
+
+  // post this somewhere: JSON.stringify(activeSnipes[JSON.stringify(channel)])
+
+
+}
+
 // Something to consider paging to disk or network
 const flipMonitorIntervals: object = {};
 
@@ -308,6 +321,8 @@ function monitorFlipResults(msg: MessageSummary): void {
           console.log('results are in');
           resolveFlip(msg.channel, flipDetails.resultInfo.number);
           clearInterval(flipMonitorIntervals[msg.conversationId]);
+
+          documentSnipe(channel);
           activeSnipes[JSON.stringify(msg.channel)] = undefined;
         }
         else {
