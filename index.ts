@@ -1,10 +1,9 @@
 // tsc --lib es2015 index.ts
 
-import axios, { AxiosResponse } from "axios";
-
 import * as _ from "lodash";
 import * as os from "os";
 import * as Bot from "./keybase-bot";
+import * as mysql from "mysql";
 
 import "source-map-support/register";
 
@@ -28,6 +27,39 @@ interface ISnipe {
   clock: string;
   timeout: string;
 }
+
+
+function documentSnipe(channel: ChatChannel, winner: string, wasCancelled: boolean) {
+
+
+  let participants = JSON.stringify(activeSnipes[JSON.stringify(channel)].participants);
+  let connection = mysql.createConnection({
+    host     : process.env.MYSQL_HOST,
+    user     : process.env.MYSQL_USER,
+    password : process.env.MYSQL_PASSWORD,
+    database : process.env.MYSQL_DB
+  });
+
+  connection.connect();
+
+  if(winner !== null) {
+    winner = `'${winner}'`;
+  }
+
+  connection.query(`INSERT INTO snipes
+    (participants, winner, was_cancelled)
+    VALUES
+    ('${participants}', ${winner}, ${wasCancelled})`, function (error, results, fields) {
+    if (error) {
+      console.log(error);
+    }
+  });
+
+  connection.end();
+
+}
+
+
 
 function processRefund(txn: Transaction, channel: ChatChannel): void {
 
@@ -86,6 +118,9 @@ function resolveFlip(channel: ChatChannel, winningNumber: number): void {
   bot.chat.send(channel, {
     body: `Congrats to @${winnerUsername}`,
   });
+
+  documentSnipe(channel, winnerUsername, false);
+
 }
 
 function buildBettorRange(channel: ChatChannel): any {
@@ -265,11 +300,13 @@ function executeFlipOrCancel(channel: ChatChannel): void {
       bot.chat.send(channel, {
         body: "The snipe has been cancelled due to a lack of participants.",
       });
+      documentSnipe(channel, null, true);
       activeSnipes[JSON.stringify(channel)] = undefined;
     } else {
       bot.chat.send(channel, {
         body: "The snipe has been cancelled due to a lack of participants.",
       });
+      documentSnipe(channel, null, true);
       activeSnipes[JSON.stringify(channel)] = undefined;
     }
   }
@@ -284,20 +321,13 @@ function cancelFlip(conversationId: string, channel: ChatChannel, err: Error): v
     activeSnipes[JSON.stringify(channel)].participants.forEach((participant) => {
       processRefund(participant.transaction, channel);
     });
+    documentSnipe(channel, null, true);
     activeSnipes[JSON.stringify(channel)] = undefined;
   }
 
 }
 
-function documentSnipe(channel: ChatChannel) {
 
-
-  // post this somewhere: JSON.stringify(activeSnipes[JSON.stringify(channel)])
-
-
-}
-
-// Something to consider paging to disk or network
 const flipMonitorIntervals: object = {};
 
 function monitorFlipResults(msg: MessageSummary): void {
@@ -314,8 +344,6 @@ function monitorFlipResults(msg: MessageSummary): void {
           console.log('results are in');
           resolveFlip(msg.channel, flipDetails.resultInfo.number);
           clearInterval(flipMonitorIntervals[msg.conversationId]);
-
-          documentSnipe(msg.channel);
           activeSnipes[JSON.stringify(msg.channel)] = undefined;
         }
         else {

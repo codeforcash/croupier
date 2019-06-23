@@ -39,12 +39,32 @@ exports.__esModule = true;
 var _ = require("lodash");
 var os = require("os");
 var Bot = require("./keybase-bot");
+var mysql = require("mysql");
 require("source-map-support/register");
 var bot = new Bot(os.homedir());
 var bot2 = new Bot(os.homedir());
 var botUsername = "croupier";
 var paperkey = process.env.CROUPIER_PAPERKEY_1;
 var paperkey2 = process.env.CROUPIER_PAPERKEY_2;
+function documentSnipe(channel, winner, wasCancelled) {
+    var participants = JSON.stringify(activeSnipes[JSON.stringify(channel)].participants);
+    var connection = mysql.createConnection({
+        host: process.env.MYSQL_HOST,
+        user: process.env.MYSQL_USER,
+        password: process.env.MYSQL_PASSWORD,
+        database: process.env.MYSQL_DB
+    });
+    connection.connect();
+    if (winner !== null) {
+        winner = "'" + winner + "'";
+    }
+    connection.query("INSERT INTO snipes\n    (participants, winner, was_cancelled)\n    VALUES\n    ('" + participants + "', " + winner + ", " + wasCancelled + ")", function (error, results, fields) {
+        if (error) {
+            console.log(error);
+        }
+    });
+    connection.end();
+}
 function processRefund(txn, channel) {
     console.log("refunding txn", txn);
     // API returns a response, number of stroops
@@ -85,6 +105,7 @@ function resolveFlip(channel, winningNumber) {
     bot.chat.send(channel, {
         body: "Congrats to @" + winnerUsername
     });
+    documentSnipe(channel, winnerUsername, false);
 }
 function buildBettorRange(channel) {
     var bettorMap = {};
@@ -184,7 +205,7 @@ function launchSnipe(channel) {
     // Tell the channel: OK, your snipe has been accepted for routing.
     var snipeTimeout = 60;
     var message = "The snipe is on.  Bet in multiples of 0.01XLM.  Betting format:";
-    message += "```+1.01XLM@" + botUsername + "```";
+    message += "```+0.01XLM@" + botUsername + "```";
     activeSnipes[JSON.stringify(channel)] = {
         betting_open: true,
         participants: [],
@@ -229,30 +250,31 @@ function executeFlipOrCancel(channel) {
             bot.chat.send(channel, {
                 body: "The snipe has been cancelled due to a lack of participants."
             });
+            documentSnipe(channel, null, true);
             activeSnipes[JSON.stringify(channel)] = undefined;
         }
         else {
             bot.chat.send(channel, {
                 body: "The snipe has been cancelled due to a lack of participants."
             });
+            documentSnipe(channel, null, true);
             activeSnipes[JSON.stringify(channel)] = undefined;
         }
     }
 }
 function cancelFlip(conversationId, channel, err) {
     clearInterval(flipMonitorIntervals[conversationId]);
-    bot.chat.send(channel, {
-        body: "The flip has been cancelled due to error, and everyone is getting a refund"
-    });
-    activeSnipes[JSON.stringify(channel)].participants.forEach(function (participant) {
-        processRefund(participant.transaction, channel);
-    });
-    activeSnipes[JSON.stringify(channel)] = undefined;
+    if (typeof (activeSnipes[JSON.stringify(channel)]) !== 'undefined') {
+        bot.chat.send(channel, {
+            body: "The flip has been cancelled due to error, and everyone is getting a refund"
+        });
+        activeSnipes[JSON.stringify(channel)].participants.forEach(function (participant) {
+            processRefund(participant.transaction, channel);
+        });
+        documentSnipe(channel, null, true);
+        activeSnipes[JSON.stringify(channel)] = undefined;
+    }
 }
-function documentSnipe(channel) {
-    // post this somewhere: JSON.stringify(activeSnipes[JSON.stringify(channel)])
-}
-// Something to consider paging to disk or network
 var flipMonitorIntervals = {};
 function monitorFlipResults(msg) {
     flipMonitorIntervals[msg.conversationId] = setInterval((function () {
@@ -262,7 +284,6 @@ function monitorFlipResults(msg) {
                     console.log('results are in');
                     resolveFlip(msg.channel, flipDetails.resultInfo.number);
                     clearInterval(flipMonitorIntervals[msg.conversationId]);
-                    documentSnipe(msg.channel);
                     activeSnipes[JSON.stringify(msg.channel)] = undefined;
                 }
                 else {
@@ -329,7 +350,6 @@ function main() {
                         body: botUsername + " was just restarted...[development mode] [use at own risk] [not functional]"
                     };
                     bot.chat.send(channel, message);
-                    bot.chat.sendMoneyInChat('test3', 'mkbot', '0.01', 'zackburt');
                     return [4 /*yield*/, bot.chat.watchAllChannelsForNewMessages(function (msg) { return __awaiter(_this, void 0, void 0, function () {
                             return __generator(this, function (_a) {
                                 try {
