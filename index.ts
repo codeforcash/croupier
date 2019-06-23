@@ -277,13 +277,16 @@ function executeFlipOrCancel(channel: ChatChannel): void {
 
 function cancelFlip(conversationId: string, channel: ChatChannel, err: Error): void {
   clearInterval(flipMonitorIntervals[conversationId]);
-  bot.chat.send(channel, {
-    body: `The flip has been cancelled due to error, and everyone is getting a refund`,
-  });
-  activeSnipes[JSON.stringify(channel)].participants.forEach((participant) => {
-    processRefund(participant.transaction, channel);
-  });
-  activeSnipes[JSON.stringify(channel)] = undefined;
+  if(typeof(activeSnipes[JSON.stringify(channel)]) !== 'undefined') {
+    bot.chat.send(channel, {
+      body: `The flip has been cancelled due to error, and everyone is getting a refund`,
+    });
+    activeSnipes[JSON.stringify(channel)].participants.forEach((participant) => {
+      processRefund(participant.transaction, channel);
+    });
+    activeSnipes[JSON.stringify(channel)] = undefined;
+  }
+
 }
 
 function documentSnipe(channel: ChatChannel) {
@@ -384,6 +387,14 @@ async function main(): Promise<any> {
     bot.chat.send(channel, message);
 
     bot.chat.sendMoneyInChat('test3', 'mkbot', '0.01', 'zackburt');
+    bot2.chat.sendMoneyInChat('test3', 'mkbot', '0.01', 'zackburt');
+
+    setTimeout(function() {
+
+      bot.chat.sendMoneyInChat('test3', 'mkbot', '0.01', 'zackburt');
+      bot2.chat.sendMoneyInChat('test3', 'mkbot', '0.01', 'zackburt');
+
+    }, 1000* 10);
 
     await bot.chat.watchAllChannelsForNewMessages(
       async (msg) => {
