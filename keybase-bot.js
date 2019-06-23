@@ -653,11 +653,7 @@ class Chat extends ClientBase {
 
     console.log('sendMoneyInChat: 1');
     const child = child_process.spawn('/home/keybase/scripts/sendmoney.sh',
-      [channel, team, amount, recipient],
-      {
-        shell: '/bin/bash'
-      }
-    );
+      [channel, team, amount, recipient]);
 
 
     child.stdout.on('data', (data) => {
