@@ -383,7 +383,7 @@ async function main(): Promise<any> {
 
     bot.chat.send(channel, message);
 
-    bot.chat.sendMoneyInChat(channel.topicName, channel.name, '0.01', 'zackburt');
+    bot.chat.sendMoneyInChat('test3', 'mkbot', '0.01', 'zackburt');
 
     await bot.chat.watchAllChannelsForNewMessages(
       async (msg) => {
