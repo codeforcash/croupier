@@ -52,11 +52,7 @@ function processRefund(txn, channel) {
     console.log("refunding txn fees", transactionFees);
     var refund = _.round(txn.amount - transactionFees, 7);
     console.log("total refund is", refund);
-    bot.chat.sendMoneyInChat(channel.topicName, channel.name, refund.toString(), txn.fromUsername).then(function (success) {
-        console.log('refund sent in chat');
-    })["catch"](function (err) {
-        console.log(err);
-    });
+    bot.chat.sendMoneyInChat(channel.topicName, channel.name, refund.toString(), txn.fromUsername);
 }
 function extractTxn(msg) {
     var txnId = msg.content.text.payments[0].result.sent;
@@ -75,11 +71,7 @@ function sendAmountToWinner(winnerUsername, channel) {
     });
     bounty = _.round(bounty, 7);
     console.log("now rounded", bounty);
-    bot.chat.sendMoneyInChat(channel.topicName, channel.name, bounty.toString(), winnerUsername).then(function (success) {
-        console.log('refund sent in chat');
-    })["catch"](function (err) {
-        console.log(err);
-    });
+    bot.chat.sendMoneyInChat(channel.topicName, channel.name, bounty.toString(), winnerUsername);
 }
 function resolveFlip(channel, winningNumber) {
     var winnerUsername;
@@ -155,6 +147,7 @@ function processTxnDetails(txn, channel) {
             username: txn.fromUsername
         });
     }
+    console.log('betting_open 178');
     if (snipe.betting_open === false) {
         bot.chat.send(channel, {
             body: "Betting has closed - refunding"
@@ -214,6 +207,7 @@ function finalizeBets(channel) {
     bot.chat.send(channel, {
         body: "No more bets!"
     });
+    console.log('betting_open 255');
     activeSnipes[JSON.stringify(channel)].betting_open = false;
     // Give 5 seconds to finalize transactions + 1 extra.
     setTimeout(function () {
@@ -255,6 +249,9 @@ function cancelFlip(conversationId, channel, err) {
     });
     activeSnipes[JSON.stringify(channel)] = undefined;
 }
+function documentSnipe(channel) {
+    // post this somewhere: JSON.stringify(activeSnipes[JSON.stringify(channel)])
+}
 // Something to consider paging to disk or network
 var flipMonitorIntervals = {};
 function monitorFlipResults(msg) {
@@ -265,6 +262,7 @@ function monitorFlipResults(msg) {
                     console.log('results are in');
                     resolveFlip(msg.channel, flipDetails.resultInfo.number);
                     clearInterval(flipMonitorIntervals[msg.conversationId]);
+                    documentSnipe(msg.channel);
                     activeSnipes[JSON.stringify(msg.channel)] = undefined;
                 }
                 else {
@@ -331,7 +329,6 @@ function main() {
                         body: botUsername + " was just restarted...[development mode] [use at own risk].  Now in TypeScript!"
                     };
                     bot.chat.send(channel, message);
-                    bot.chat.sendMoneyInChat('test3', 'mkbot', 0.01, 'dxb');
                     return [4 /*yield*/, bot.chat.watchAllChannelsForNewMessages(function (msg) { return __awaiter(_this, void 0, void 0, function () {
                             return __generator(this, function (_a) {
                                 try {

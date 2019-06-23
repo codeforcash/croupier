@@ -312,7 +312,7 @@ function monitorFlipResults(msg: MessageSummary): void {
           resolveFlip(msg.channel, flipDetails.resultInfo.number);
           clearInterval(flipMonitorIntervals[msg.conversationId]);
 
-          documentSnipe(channel);
+          documentSnipe(msg.channel);
           activeSnipes[JSON.stringify(msg.channel)] = undefined;
         }
         else {
