@@ -1,9 +1,9 @@
 // tsc --lib es2015 index.ts
 
 import * as _ from "lodash";
+import * as mysql from "mysql";
 import * as os from "os";
 import * as Bot from "./keybase-bot";
-import * as mysql from "mysql";
 
 import "source-map-support/register";
 
@@ -28,52 +28,41 @@ interface ISnipe {
   timeout: string;
 }
 
-
-function documentSnipe(channel: ChatChannel, winner: string, wasCancelled: boolean) {
-
-
-  let participants = JSON.stringify(activeSnipes[JSON.stringify(channel)].participants);
-  let connection = mysql.createConnection({
+function documentSnipe(channel: ChatChannel, winner: string, wasCancelled: boolean): void {
+  const participants: string = JSON.stringify(activeSnipes[JSON.stringify(channel)].participants);
+  const connection: mysql.Connection = mysql.createConnection({
+    database : process.env.MYSQL_DB,
     host     : process.env.MYSQL_HOST,
-    user     : process.env.MYSQL_USER,
     password : process.env.MYSQL_PASSWORD,
-    database : process.env.MYSQL_DB
+    user     : process.env.MYSQL_USER,
   });
 
   connection.connect();
 
-  if(winner !== null) {
+  if (winner !== null) {
     winner = `'${winner}'`;
   }
 
   connection.query(`INSERT INTO snipes
     (participants, winner, was_cancelled)
     VALUES
-    ('${participants}', ${winner}, ${wasCancelled})`, function (error, results, fields) {
-    if (error) {
-      console.log(error);
-    }
-  });
+    ('${participants}', ${winner}, ${wasCancelled})`, (error, results, fields) => {
+      if (error) {
+        console.log(error);
+      }
+    });
 
   connection.end();
-
 }
 
-
-
 function processRefund(txn: Transaction, channel: ChatChannel): void {
-
   console.log("refunding txn", txn);
   // API returns a response, number of stroops
-  let transactionFees: number = 300 * 0.0000001;
+  const transactionFees: number = 300 * 0.0000001;
   console.log("refunding txn fees", transactionFees);
   const refund: number = _.round(txn.amount - transactionFees, 7);
   console.log("total refund is", refund);
-
-
   bot.chat.sendMoneyInChat(channel.topicName, channel.name, refund.toString(), txn.fromUsername);
-
-
 }
 
 function extractTxn(msg: MessageSummary): void {
@@ -83,10 +72,7 @@ function extractTxn(msg: MessageSummary): void {
 
 function sendAmountToWinner(winnerUsername: string, channel: ChatChannel): void {
 
-  let txnDetailsApi: string;
-  let transactionFees: number;
   let bounty: number;
-  let thisTxnFee: number;
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
 
   bounty = 0;
@@ -105,14 +91,13 @@ function sendAmountToWinner(winnerUsername: string, channel: ChatChannel): void 
 
 function resolveFlip(channel: ChatChannel, winningNumber: number): void {
 
-  let winnerUsername;
-  let bettorRange = buildBettorRange(channel);
+  let winnerUsername: string;
+  const bettorRange: object = buildBettorRange(channel);
   Object.keys(bettorRange).forEach((username) => {
-    if(bettorRange[username][0] <= winningNumber && bettorRange[username][1] >= winningNumber) {
+    if (bettorRange[username][0] <= winningNumber && bettorRange[username][1] >= winningNumber) {
       winnerUsername = username;
     }
   });
-
 
   sendAmountToWinner(winnerUsername, channel);
   bot.chat.send(channel, {
@@ -120,21 +105,20 @@ function resolveFlip(channel: ChatChannel, winningNumber: number): void {
   });
 
   documentSnipe(channel, winnerUsername, false);
-
 }
 
 function buildBettorRange(channel: ChatChannel): any {
-  let bettorMap = {};
+  const bettorMap: object = {};
   activeSnipes[JSON.stringify(channel)].participants.forEach((participant) => {
-    if(typeof(bettorMap[participant.username]) === 'undefined') {
+    if (typeof(bettorMap[participant.username]) === "undefined") {
       bettorMap[participant.username] = Math.floor(participant.transaction.amount / 0.01);
     } else {
       bettorMap[participant.username] += Math.floor(participant.transaction.amount / 0.01);
     }
   });
 
-  let bettorRange = {};
-  let start = 0;
+  const bettorRange: object = {};
+  let start: number = 0;
   Object.keys(bettorMap).forEach((key) => {
     bettorRange[key] = [start + 1, start + bettorMap[key]];
     start += bettorMap[key];
@@ -145,29 +129,22 @@ function buildBettorRange(channel: ChatChannel): any {
 
 function flip(channel: ChatChannel): void {
 
-  let bettorRange = buildBettorRange(channel);
+  const bettorRange: object = buildBettorRange(channel);
+  const bettingValues: Array<Array<number>> = Object.values(bettorRange);
+  const flatBettingValues: Array<number> = _.flatten(bettingValues);
 
-  let bettingValues = Object.values(bettorRange);
-  let flatBettingValues = _.flatten(bettingValues);
+  const minBet: number = flatBettingValues.reduce((a, b) => Math.min(a, b));
+  const maxBet: number = flatBettingValues.reduce((a, b) => Math.max(a, b));
 
-  let minBet = flatBettingValues.reduce(function(a: number, b: number) {
-    return Math.min(a, b);
-  });
-  let maxBet = flatBettingValues.reduce(function(a: number, b: number) {
-    return Math.max(a, b);
-  });
-
-  let bettingTable = 'Betting table\n'
+  let bettingTable: string = "Betting table\n";
 
   Object.keys(bettorRange).forEach((username) => {
-
     bettingTable += `\n@${username}: \`${bettorRange[username][0]} - ${bettorRange[username][1]}\``;
-
   });
 
   bot2.chat.send(channel, {
-    body: bettingTable
-  })
+    body: bettingTable,
+  });
   bot2.chat.send(channel, {
     body: `/flip ${minBet}..${maxBet}`,
   });
@@ -181,26 +158,23 @@ function processTxnDetails(txn: Transaction, channel: ChatChannel): void {
   if (!isNative) {
     return;
   }
-
-  if(parseFloat(txn.amount) < 0.01) {
+  if (parseFloat(txn.amount) < 0.01) {
     bot.chat.send(channel, {
-      body: 'Thanks for the tip, but bets should be >= 0.01XLM',
+      body: "Thanks for the tip, but bets should be >= 0.01XLM",
     });
     return;
   }
 
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   if (typeof(snipe) === "undefined") {
-
     launchSnipe(channel);
     activeSnipes[JSON.stringify(channel)].participants.push({
       transaction: txn,
       username: txn.fromUsername,
     });
-
   }
 
-  console.log('betting_open 178');
+  console.log("betting_open 178");
   if (snipe.betting_open === false) {
     bot.chat.send(channel, {
       body: `Betting has closed - refunding`,
@@ -208,7 +182,6 @@ function processTxnDetails(txn: Transaction, channel: ChatChannel): void {
     processRefund(txn, channel);
     return;
   }
-
 
   activeSnipes[JSON.stringify(channel)].participants.push({
     transaction: txn,
@@ -218,13 +191,11 @@ function processTxnDetails(txn: Transaction, channel: ChatChannel): void {
     body: `@${txn.fromUsername} is locked into the snipe!`,
   });
   resetSnipeClock(channel);
-
 }
 
+function resetSnipeClock(channel: ChatChannel): void {
 
-function resetSnipeClock(channel) {
-
-  let snipeTimeout: number = 60;
+  const snipeTimeout: number = 60;
   clearTimeout(activeSnipes[JSON.stringify(channel)].timeout);
   bot.chat.delete(channel, activeSnipes[JSON.stringify(channel)].clock, {});
   bot.chat.send(channel, {
@@ -233,7 +204,7 @@ function resetSnipeClock(channel) {
     runClock(channel, sentMessage.id, snipeTimeout);
     activeSnipes[JSON.stringify(channel)].clock = sentMessage.id;
   });
-  let finalizeBetsTimeout = setTimeout(() => {
+  const finalizeBetsTimeout: NodeJS.Timeout = setTimeout(() => {
     finalizeBets(channel);
   }, snipeTimeout * 1000);
   activeSnipes[JSON.stringify(channel)].timeout = finalizeBetsTimeout;
@@ -245,15 +216,15 @@ const activeSnipes: object = {};
 function launchSnipe(channel: ChatChannel): void {
   // Tell the channel: OK, your snipe has been accepted for routing.
 
-  let snipeTimeout: number = 60;
+  const snipeTimeout: number = 60;
   let message: string = "The snipe is on.  Bet in multiples of 0.01XLM.  Betting format:";
   message += `\`\`\`+0.01XLM@${botUsername}\`\`\``;
 
   activeSnipes[JSON.stringify(channel)] = {
     betting_open: true,
-    participants: [],
     clock: null,
-    timeout: null
+    participants: [],
+    timeout: null,
   };
 
   bot.chat.send(channel, { body: message });
@@ -265,7 +236,7 @@ function launchSnipe(channel: ChatChannel): void {
     activeSnipes[JSON.stringify(channel)].clock = sentMessage.id;
   });
 
-  let finalizeBetsTimeout = setTimeout(() => {
+  const finalizeBetsTimeout: NodeJS.Timeout = setTimeout(() => {
     finalizeBets(channel);
   }, snipeTimeout * 1000);
   activeSnipes[JSON.stringify(channel)].timeout = finalizeBetsTimeout;
@@ -277,7 +248,7 @@ function finalizeBets(channel: ChatChannel): void {
     body: "No more bets!",
   });
 
-  console.log('betting_open 255');
+  console.log("betting_open 255");
   activeSnipes[JSON.stringify(channel)].betting_open = false;
    // Give 5 seconds to finalize transactions + 1 extra.
   setTimeout(() => {
@@ -289,8 +260,8 @@ function finalizeBets(channel: ChatChannel): void {
 function executeFlipOrCancel(channel: ChatChannel): void {
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   if (typeof(snipe) !== "undefined") {
-
-    let uniqParticipants = _.union(snipe.participants.map((participant) => { return participant.username; }));
+    const participantUsernames: Array<string> = snipe.participants.map((participant) => participant.username);
+    const uniqParticipants: Array<string> = _.union(participantUsernames);
     if (uniqParticipants.length > 1) {
       flip(channel);
     } else if (uniqParticipants.length === 1) {
@@ -314,7 +285,7 @@ function executeFlipOrCancel(channel: ChatChannel): void {
 
 function cancelFlip(conversationId: string, channel: ChatChannel, err: Error): void {
   clearInterval(flipMonitorIntervals[conversationId]);
-  if(typeof(activeSnipes[JSON.stringify(channel)]) !== 'undefined') {
+  if (typeof(activeSnipes[JSON.stringify(channel)]) !== "undefined") {
     bot.chat.send(channel, {
       body: `The flip has been cancelled due to error, and everyone is getting a refund`,
     });
@@ -324,9 +295,7 @@ function cancelFlip(conversationId: string, channel: ChatChannel, err: Error): v
     documentSnipe(channel, null, true);
     activeSnipes[JSON.stringify(channel)] = undefined;
   }
-
 }
-
 
 const flipMonitorIntervals: object = {};
 
@@ -341,13 +310,12 @@ function monitorFlipResults(msg: MessageSummary): void {
         msg.content.flip.gameId,
       ).then((flipDetails) => {
         if (flipDetails.phase === 2) {
-          console.log('results are in');
+          console.log("results are in");
           resolveFlip(msg.channel, flipDetails.resultInfo.number);
           clearInterval(flipMonitorIntervals[msg.conversationId]);
           activeSnipes[JSON.stringify(msg.channel)] = undefined;
-        }
-        else {
-          console.log('results are NOT in', flipDetails);
+        } else {
+          console.log("results are NOT in", flipDetails);
         }
       }).catch((err) => {
 
@@ -363,21 +331,15 @@ function monitorFlipResults(msg: MessageSummary): void {
 const allClocks: Array<number> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].reverse();
 const runningClocks: object = {};
 
-
-
 function runClock(channel: ChatChannel, messageId: string, seconds: number): void {
-
-
   try {
     bot.chat.edit(channel, messageId, {
       message: {
         body: ":clock" + allClocks[seconds % 12].toString() + ":" + ` betting stops in ${seconds}s`,
       },
     });
-  } catch(e) {
-
+  } catch (e) {
     return;
-
   }
 
   if (seconds > 1) {
@@ -403,8 +365,6 @@ async function main(): Promise<any> {
     console.log("Second key initialized");
     console.log("Listening for all messages...");
 
-
-
     const channel: object = {
        membersType: "team", name: "mkbot", public: false, topicName: "test3", topicType: "chat",
     };
@@ -413,7 +373,6 @@ async function main(): Promise<any> {
     };
 
     bot.chat.send(channel, message);
-
 
     await bot.chat.watchAllChannelsForNewMessages(
       async (msg) => {
