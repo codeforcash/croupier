@@ -262,6 +262,21 @@ function flip(channel) {
         body: "/flip " + minBet + ".." + maxBet
     });
 }
+function processNewBet(txn, msg) {
+    var channel = msg.channel;
+    var onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?(\d+)/);
+    var snipe = activeSnipes[JSON.stringify(channel)];
+    if (onBehalfOfMatch !== null) {
+        var onBehalfOfRecipient = onBehalfOfMatch[1];
+        addSnipeParticipant(channel, txn, onBehalfOfRecipient);
+        snipe.chatSend("@" + onBehalfOfRecipient + " is locked into the snipe, thanks to @" + txn.fromUsername + "!");
+    }
+    else {
+        addSnipeParticipant(channel, txn, undefined);
+        snipe.chatSend("@" + txn.fromUsername + " is locked into the snipe!");
+    }
+    resetSnipeClock(channel);
+}
 function processTxnDetails(txn, msg) {
     var channel = msg.channel;
     if (txn.toUsername !== botUsername) {
@@ -333,10 +348,11 @@ function processTxnDetails(txn, msg) {
             }
         };
         logNewSnipe(channel).then(function (snipeId) {
-            activeSnipes[JSON.stringify(channel)].snipeId = snipeId;
+            snipe = activeSnipes[JSON.stringify(channel)];
+            snipe.snipeId = snipeId;
             launchSnipe(channel);
+            processNewBet(txn, msg);
         });
-        return;
     }
     else {
         if (snipe.betting_open === false) {
@@ -347,17 +363,7 @@ function processTxnDetails(txn, msg) {
             }, 1000 * 5);
             return;
         }
-        var onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?(\d+)/);
-        if (onBehalfOfMatch !== null) {
-            var onBehalfOfRecipient = onBehalfOfMatch[1];
-            addSnipeParticipant(channel, txn, onBehalfOfRecipient);
-            snipe.chatSend("@" + onBehalfOfRecipient + " is locked into the snipe, thanks to @" + txn.fromUsername + "!");
-        }
-        else {
-            addSnipeParticipant(channel, txn, undefined);
-            snipe.chatSend("@" + txn.fromUsername + " is locked into the snipe!");
-        }
-        resetSnipeClock(channel);
+        processNewBet(txn, msg);
     }
 }
 function calculatePotSize(channel) {
@@ -430,10 +436,6 @@ function loadActiveSnipes() {
                         });
                     }
                 };
-                snipes[JSON.stringify(result.channel)].chatSend('Croupier was restarted... Previous bets are still valid!');
-                snipes[JSON.stringify(result.channel)].chatSend(buildBettingTable(calculatePotSize(result.channel), buildBettorRange(result.channel)));
-                // TODO: this might be a good time to re communicate the snipe table + odds to everyone.
-                launchSnipe(result.channel);
             });
             resolve(snipes);
         });
@@ -443,7 +445,7 @@ function loadActiveSnipes() {
 function launchSnipe(channel) {
     // Tell the channel: OK, your snipe has been accepted for routing.
     var snipe = activeSnipes[JSON.stringify(channel)];
-    var message = "The snipe is on (**#${activeSnipes[JSON.stringify(channel)].snipeId}**).  Bet in multiples of 0.01XLM.  Betting format:";
+    var message = "The snipe is on (**#" + activeSnipes[JSON.stringify(channel)].snipeId + "**).  Bet in multiples of 0.01XLM.  Betting format:";
     message += "```+0.01XLM@" + botUsername + "```";
     snipe.chatSend(message);
     snipe.betting_stops = moment().add(snipe.initialCountdown, 'seconds');
@@ -561,9 +563,13 @@ function runClock(channel, messageId, seconds) {
             else {
                 hourglass = ":hourglass_flowing_sand:";
             }
+            var stops_when = moment().to(snipe.betting_stops);
+            if (seconds < 55) {
+                stops_when = "in %{seconds} seconds";
+            }
             bot.chat.edit(channel, messageId, {
                 message: {
-                    body: hourglass + (" betting stops " + moment().to(snipe.betting_stops))
+                    body: hourglass + (" betting stops " + stops_when)
                 }
             });
         }
@@ -609,6 +615,14 @@ function main() {
                     return [4 /*yield*/, loadActiveSnipes()];
                 case 3:
                     activeSnipes = _a.sent();
+                    console.log('here, the active snipes we found: ');
+                    console.log(activeSnipes);
+                    Object.keys(activeSnipes).forEach(function (chid) {
+                        var channel = JSON.parse(chid);
+                        activeSnipes[chid].chatSend('Croupier was restarted... Previous bets are still valid!');
+                        activeSnipes[chid].chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(channel)));
+                        launchSnipe(channel);
+                    });
                     return [4 /*yield*/, bot.chat.watchAllChannelsForNewMessages(function (msg) { return __awaiter(_this, void 0, void 0, function () {
                             return __generator(this, function (_a) {
                                 try {

@@ -355,6 +355,25 @@ function flip(channel: ChatChannel): void {
   });
 }
 
+function processNewBet(txn: Transaction, msg: MessageSummary): void {
+
+  const channel = msg.channel;
+  const onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?(\d+)/);
+  const snipe = activeSnipes[JSON.stringify(channel)];
+  if (onBehalfOfMatch !== null) {
+    const onBehalfOfRecipient = onBehalfOfMatch[1];
+    addSnipeParticipant(channel, txn, onBehalfOfRecipient);
+    snipe.chatSend(`@${onBehalfOfRecipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
+  }
+  else {
+    addSnipeParticipant(channel, txn, undefined);
+    snipe.chatSend(`@${txn.fromUsername} is locked into the snipe!`);
+  }
+
+  resetSnipeClock(channel);
+
+}
+
 function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
 
   const channel: ChatChannel = msg.channel;
@@ -373,7 +392,7 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
     return;
   }
 
-  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
+  let snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   if (typeof(snipe) === "undefined") {
 
 
@@ -436,38 +455,31 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
     };
 
     logNewSnipe(channel).then((snipeId) => {
-      activeSnipes[JSON.stringify(channel)].snipeId = snipeId;
+
+      snipe = activeSnipes[JSON.stringify(channel)];
+      snipe.snipeId = snipeId;
       launchSnipe(channel);
+      processNewBet(txn, msg);
     });
 
   }
-
-  if (snipe.betting_open === false) {
-
-    snipe.chatSend(`Betting has closed - refunding`);
-
-    // Ensure the transaction is Completed before refunding
-    setTimeout(function() {
-      processRefund(txn, channel);
-    }, 1000 * 5);
-    return;
-  }
-
-  const onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?(\d+)/);
-  if (onBehalfOfMatch !== null) {
-    const onBehalfOfRecipient = onBehalfOfMatch[1];
-
-    addSnipeParticipant(channel, txn, onBehalfOfRecipient);
-
-    snipe.chatSend(`@${onBehalfOfRecipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
-  }
   else {
-    addSnipeParticipant(channel, txn, undefined);
-    snipe.chatSend(`@${txn.fromUsername} is locked into the snipe!`);
+
+    if (snipe.betting_open === false) {
+
+      snipe.chatSend(`Betting has closed - refunding`);
+
+      // Ensure the transaction is Completed before refunding
+      setTimeout(function() {
+        processRefund(txn, channel);
+      }, 1000 * 5);
+      return;
+    }
+
+
+    processNewBet(txn, msg);
+
   }
-
-  resetSnipeClock(channel);
-
 
 
 }
@@ -727,9 +739,14 @@ function runClock(channel: ChatChannel, messageId: string, seconds: number): voi
         hourglass = ":hourglass_flowing_sand:";
       }
 
+      let stops_when = moment().to(snipe.betting_stops);
+      if(seconds < 55) {
+        stops_when = `in %{seconds} seconds`;
+      }
+
       bot.chat.edit(channel, messageId, {
         message: {
-          body: hourglass + ` betting stops ${moment().to(snipe.betting_stops)}`,
+          body: hourglass + ` betting stops ${stops_when}`,
         },
       });
 
