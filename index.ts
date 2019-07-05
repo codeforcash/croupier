@@ -19,6 +19,7 @@ import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
 interface IParticipant {
   username: string;
   transaction: Transaction;
+  onBehalfOf?: string;
 }
 
 interface ISnipe {
@@ -27,10 +28,17 @@ interface ISnipe {
   clock: string;
   timeout: NodeJS.Timeout;
   followupCountdown: number;
+  snipeId: number;
 }
 
-function documentSnipe(channel: ChatChannel, winner: string, wasCancelled: boolean): void {
+
+
+
+function updateSnipeLog(channel: ChatChannel): void {
+
   const participants: string = JSON.stringify(activeSnipes[JSON.stringify(channel)].participants);
+  let snipeId = activeSnipes[JSON.stringify(channel)].snipeId;
+
   const connection: mysql.Connection = mysql.createConnection({
     database : process.env.MYSQL_DB,
     host     : process.env.MYSQL_HOST,
@@ -40,14 +48,100 @@ function documentSnipe(channel: ChatChannel, winner: string, wasCancelled: boole
 
   connection.connect();
 
-  if (winner !== null) {
-    winner = `'${winner}'`;
+  connection.query(`UPDATE snipes SET participants=${connection.escape(participants)} WHERE id=${connection.escape(snipeId)}`, (error, results, fields) => {
+    if (error) {
+      console.log(error);
+    }
+  });
+  connection.end();
+}
+
+
+function addSnipeParticipant(channel: ChatChannel, txn: Transaction, onBehalfOf?: string): void {
+
+  let newParticipant;
+  if(typeof(onBehalfOf) === 'undefined') {
+    newParticipant = {
+      transaction: txn,
+      username: txn.fromUsername,
+    };
+  }
+  else {
+    newParticipant = {
+      transaction: txn,
+      username: txn.fromUsername,
+      onBehalfOf: onBehalfOf
+    };
   }
 
+  activeSnipes[JSON.stringify(channel)].participants.push(newParticipant);
+  updateSnipeLog(channel);
+}
+
+async function logNewSnipe(channel: ChatChannel): void {
+
+  let snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
+  const connection: mysql.Connection = mysql.createConnection({
+    database : process.env.MYSQL_DB,
+    host     : process.env.MYSQL_HOST,
+    password : process.env.MYSQL_PASSWORD,
+    user     : process.env.MYSQL_USER,
+  });
+
+  connection.connect();
+
   connection.query(`INSERT INTO snipes
-    (participants, winner, was_cancelled)
+    (channel, initial_countdown, followup_countdown)
     VALUES
-    ('${participants}', ${winner}, ${wasCancelled})`, (error, results, fields) => {
+    (${connection.escape(JSON.stringify(channel))},
+    ${connection.escape(snipe.initialCountdown)},
+    ${connection.escape(snipe.followupCountdown)}
+    )`, (error, results, fields) => {
+    if (error) {
+      console.log(error);
+    }
+
+    snipe.snipeId = results.insertId;
+
+  });
+  connection.end();
+}
+
+
+
+function documentSnipe(channel: ChatChannel, reason: string): void {
+
+  let snipeId = activeSnipes[JSON.stringify(channel)].snipeId;
+
+  const connection: mysql.Connection = mysql.createConnection({
+    database : process.env.MYSQL_DB,
+    host     : process.env.MYSQL_HOST,
+    password : process.env.MYSQL_PASSWORD,
+    user     : process.env.MYSQL_USER,
+  });
+
+  connection.connect();
+
+  if (reason !== 'lack-of-participants' && reason !== 'flip-error') {
+    was_cancelled = 1;
+    winner = null;
+    cancellation_reason = reason;
+  }
+  else {
+    was_cancelled = 0;
+    winner = reason;
+    cancellation_reason = null;
+  }
+
+  connection.query(`UPDATE snipes
+    SET
+      winner=${connection.escape(winner)},
+      was_cancelled=${connection.escape(was_cancelled)},
+      cancellation_reason=${connection.escape(cancellation_reason)},
+      in_progress=0
+    WHERE
+      id=${connection.escape(snipeId)}
+    `, (error, results, fields) => {
       if (error) {
         console.log(error);
       }
@@ -79,6 +173,12 @@ function processRefund(txn: Transaction, channel: ChatChannel): void {
   });
 }
 
+
+function clearSnipe(channel: ChatChannel, reason: string): void {
+  activeSnipes[JSON.stringify(channel)] = undefined;
+  documentSnipe(channel, reason);
+}
+
 function extractTxn(msg: MessageSummary): void {
   const txnId: string = msg.content.text.payments[0].result.sent;
   bot.wallet.details(txnId).then((details) => processTxnDetails(details, msg));
@@ -107,7 +207,7 @@ function sendAmountToWinner(winnerUsername: string, channel: ChatChannel): void 
   });
 }
 
-function resolveFlip(channel: ChatChannel, winningNumber: number): void {
+function resolveFlip(channel: ChatChannel, winningNumber: number): string {
 
   let winnerUsername: string;
   const bettorRange: object = buildBettorRange(channel);
@@ -122,16 +222,26 @@ function resolveFlip(channel: ChatChannel, winningNumber: number): void {
     body: `Congrats to @${winnerUsername}`,
   });
 
-  documentSnipe(channel, winnerUsername, false);
+  return winnerUsername;
 }
 
 function buildBettorRange(channel: ChatChannel): any {
   const bettorMap: object = {};
   activeSnipes[JSON.stringify(channel)].participants.forEach((participant) => {
-    if (typeof(bettorMap[participant.username]) === "undefined") {
-      bettorMap[participant.username] = Math.floor(participant.transaction.amount / 0.01);
+
+
+    let username;
+    if(typeof(participant.onBehalfOf) === "undefined") {
+      let username = participant.username;
+    }
+    else {
+      let username = participant.onBehalfOf;
+    }
+
+    if (typeof(bettorMap[username]) === "undefined") {
+      bettorMap[username] = Math.floor(participant.transaction.amount / 0.01);
     } else {
-      bettorMap[participant.username] += Math.floor(participant.transaction.amount / 0.01);
+      bettorMap[username] += Math.floor(participant.transaction.amount / 0.01);
     }
   });
 
@@ -214,12 +324,22 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
       }
     }
 
-    launchSnipe(channel, initialCountdown, followupCountdown);
-    activeSnipes[JSON.stringify(channel)].participants.push({
-      transaction: txn,
-      username: txn.fromUsername,
-    });
+
+    activeSnipes[JSON.stringify(channel)] = {
+      betting_open: true,
+      clock: null,
+      participants: [],
+      timeout: null,
+      initialCountdown: initialCountdown,
+      followupCountdown: followupCountdown
+    };
+
+    await logNewSnipe(channel);
+    launchSnipe(channel);
+
   }
+
+
 
   if (snipe.betting_open === false) {
     bot.chat.send(channel, {
@@ -233,15 +353,24 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
     return;
   }
 
-  // const onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?(\d+)/);
+  const onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?(\d+)/);
+  if (onBehalfOfMatch !== null) {
+    onBehalfOfRecipient = onBehalfOfMatch[1];
 
-  activeSnipes[JSON.stringify(channel)].participants.push({
-    transaction: txn,
-    username: txn.fromUsername,
-  });
-  bot.chat.send(channel, {
-    body: `@${txn.fromUsername} is locked into the snipe!`,
-  });
+    addSnipeParticipant(channel, txn, onBehalfOfRecipient);
+
+    bot.chat.send(channel, {
+      body: `@${onBehalfOfRecipient} is locked into the snipe, thanks to @${txn.fromUsername}!`,
+    });
+  }
+  else {
+    addSnipeParticipant(channel, txn, undefined);
+
+    bot.chat.send(channel, {
+      body: `@${txn.fromUsername} is locked into the snipe!`,
+    });
+  }
+
   resetSnipeClock(channel);
 }
 
@@ -265,34 +394,74 @@ function resetSnipeClock(channel: ChatChannel): void {
 
 }
 
-const activeSnipes: object = {};
+function loadActiveSnipes(): object {
+  return new Promise(resolve => {
+    let snipes = {};
 
-function launchSnipe(channel: ChatChannel, snipeTimeout: number, followupCountdown: number): void {
+    const connection: mysql.Connection = mysql.createConnection({
+      database : process.env.MYSQL_DB,
+      host     : process.env.MYSQL_HOST,
+      password : process.env.MYSQL_PASSWORD,
+      user     : process.env.MYSQL_USER,
+    });
+
+    connection.connect();
+
+    connection.query(`SELECT * FROM snipes WHERE in_progress=1`), (error, results, fields) => {
+      if (error) {
+        console.log(error);
+      }
+
+      results.forEach((result) => {
+
+        snipes[JSON.stringify(result.channel)] = {
+          betting_open: true,
+          clock: null,
+          participants: result.participants,
+          timeout: null,
+          initialCountdown: result.initial_countdown,
+          followupCountdown: result.followup_countdown
+        };
+
+        bot.chat.send(channel, {
+          body: 'Croupier was restarted... but I remember all the snipes that were in progress.  Resuming momentarily.  All previous bets are still valid!'
+        });
+        // TODO: this might be a good time to re communicate the snipe table + odds to everyone.
+        launchSnipe(result.channel);
+
+      });
+
+      resolve(snipes);
+
+    });
+    connection.end();
+  });
+}
+
+const activeSnipes: object = await loadActiveSnipes();
+
+function launchSnipe(channel: ChatChannel): void {
   // Tell the channel: OK, your snipe has been accepted for routing.
 
-  let message: string = "The snipe is on.  Bet in multiples of 0.01XLM.  Betting format:";
+  let snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
+
+
+  let message: string = "The snipe is on (**#${activeSnipes[JSON.stringify(channel)].snipeId}**).  Bet in multiples of 0.01XLM.  Betting format:";
   message += `\`\`\`+0.01XLM@${botUsername}\`\`\``;
 
-  activeSnipes[JSON.stringify(channel)] = {
-    betting_open: true,
-    clock: null,
-    participants: [],
-    timeout: null,
-    followupCountdown: followupCountdown
-  };
 
   bot.chat.send(channel, { body: message });
 
   bot.chat.send(channel, {
-    body: `Betting stops in ${snipeTimeout} seconds`,
+    body: `Betting stops in ${snipe.initialCountdown} seconds`,
   }).then((sentMessage) => {
-    runClock(channel, sentMessage.id, snipeTimeout);
-    activeSnipes[JSON.stringify(channel)].clock = sentMessage.id;
+    runClock(channel, sentMessage.id, snipe.initialCountdown);
+    snipe.clock = sentMessage.id;
   });
 
   const finalizeBetsTimeout: NodeJS.Timeout = setTimeout(() => {
     finalizeBets(channel);
-  }, snipeTimeout * 1000);
+  }, snipe.initialCountdown * 1000);
   activeSnipes[JSON.stringify(channel)].timeout = finalizeBetsTimeout;
 
 }
@@ -322,16 +491,14 @@ function executeFlipOrCancel(channel: ChatChannel): void {
         processRefund(participant.transaction, channel);
       });
       bot.chat.send(channel, {
-        body: "The snipe has been cancelled due to a lack of participants.",
+        body: "The snipe has been canceled due to a lack of participants.",
       });
-      documentSnipe(channel, null, true);
-      activeSnipes[JSON.stringify(channel)] = undefined;
+      clearSnipe(channel, 'lack-of-participants');
     } else {
       bot.chat.send(channel, {
-        body: "The snipe has been cancelled due to a lack of participants.",
+        body: "The snipe has been canceled due to a lack of participants.",
       });
-      documentSnipe(channel, null, true);
-      activeSnipes[JSON.stringify(channel)] = undefined;
+      clearSnipe(channel, 'lack-of-participants');
     }
   }
 }
@@ -345,8 +512,7 @@ function cancelFlip(conversationId: string, channel: ChatChannel, err: Error): v
     activeSnipes[JSON.stringify(channel)].participants.forEach((participant) => {
       processRefund(participant.transaction, channel);
     });
-    documentSnipe(channel, null, true);
-    activeSnipes[JSON.stringify(channel)] = undefined;
+    clearSnipe(channel, 'flip-error');
   }
 }
 
@@ -364,9 +530,9 @@ function monitorFlipResults(msg: MessageSummary): void {
       ).then((flipDetails) => {
         if (flipDetails.phase === 2) {
           console.log("results are in");
-          resolveFlip(msg.channel, flipDetails.resultInfo.number);
+          let winner = resolveFlip(msg.channel, flipDetails.resultInfo.number);
           clearInterval(flipMonitorIntervals[msg.conversationId]);
-          activeSnipes[JSON.stringify(msg.channel)] = undefined;
+          clearSnipe(msg.channel, winner);
         } else {
           console.log("results are NOT in", flipDetails);
         }
