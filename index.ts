@@ -209,8 +209,8 @@ function processRefund(txn: Transaction, channel: ChatChannel): void {
 
 
 function clearSnipe(channel: ChatChannel, reason: string): void {
-  activeSnipes[JSON.stringify(channel)] = undefined;
   documentSnipe(channel, reason);
+  activeSnipes[JSON.stringify(channel)] = undefined;
 }
 
 function extractTxn(msg: MessageSummary): void {
@@ -761,6 +761,10 @@ function runClock(channel: ChatChannel, messageId: string, seconds: number): voi
         message: {
           body: hourglass + ` betting stops ${stops_when}`,
         },
+      }).then((res) => {
+        console.log(res);
+      }).catch((e) => {
+        console.log(e);
       });
 
     }
