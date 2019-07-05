@@ -539,7 +539,9 @@ function loadActiveSnipes(): object {
         let chatThrottle = throttledQueue(5, 5000);
         let moneyThrottle = throttledQueue(5, 5000);
 
-        snipes[JSON.stringify(result.channel)] = {
+        let channel = JSON.parse(result.channel);
+
+        snipes[JSON.stringify(channel)] = {
           betting_open: true,
           clock: null,
           participants: result.participants,
@@ -550,7 +552,7 @@ function loadActiveSnipes(): object {
           chatSend: (message) => {
             return new Promise(resolve => {
               chatThrottle(function() {
-                bot.chat.send(result.channel, {
+                bot.chat.send(channel, {
                   body: message
                 }).then((messageId) => {
                   resolve(messageId);
@@ -561,7 +563,7 @@ function loadActiveSnipes(): object {
           moneySend: (amount, recipient) => {
             return new Promise(resolve => {
               moneyThrottle(function() {
-                bot.chat.sendMoneyInChat(result.channel.topicName, result.channel.name, amount.toString(), recipient).then((res) => {
+                bot.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient).then((res) => {
                   resolve(res);
                 });
               });
