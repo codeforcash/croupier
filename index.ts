@@ -558,12 +558,6 @@ function loadActiveSnipes(): object {
           }
         };
 
-        snipes[JSON.stringify(result.channel)].chatSend('Croupier was restarted... Previous bets are still valid!');
-        snipes[JSON.stringify(result.channel)].chatSend(buildBettingTable(calculatePotSize(result.channel), buildBettorRange(result.channel)));
-
-        // TODO: this might be a good time to re communicate the snipe table + odds to everyone.
-        launchSnipe(result.channel);
-
       });
 
       resolve(snipes);
@@ -776,6 +770,17 @@ async function main(): Promise<any> {
     bot.chat.send(channel, message);
 
     activeSnipes = await loadActiveSnipes();
+    Object.keys(activeSnipes).forEach((chid) => {
+
+      let channel = JSON.parse(chid);
+      activeSnipes[chid].chatSend('Croupier was restarted... Previous bets are still valid!');
+      activeSnipes[chid].chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(result.channel)));
+      launchSnipe(result.channel);
+
+    });
+
+
+
 
     await bot.chat.watchAllChannelsForNewMessages(
       async (msg) => {
