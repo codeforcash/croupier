@@ -294,6 +294,7 @@ function buildBettorRange(channel: ChatChannel): any {
   const bettorMap: object = {};
   activeSnipes[JSON.stringify(channel)].participants.forEach((participant) => {
 
+    console.log('participant', participant);
 
     let username;
     if(typeof(participant.onBehalfOf) === "undefined") {
@@ -325,7 +326,7 @@ function buildBettingTable(potSize: number, bettorRange: object): string {
 
   let maxValue = Math.max(..._.flatten(Object.values(bettorRange)));
 
-  let bettingTable = "Pot size: ${potSize}XLM\n";
+  let bettingTable = `Pot size: ${potSize}XLM\n`;
   Object.keys(bettorRange).forEach((username) => {
     let chancePct = 100 * ( (1+(bettorRange[username][1] - bettorRange[username][0])) / maxValue);
     bettingTable += `\n@${username}: \`${bettorRange[username][0].toLocaleString()} - ${bettorRange[username][1].toLocaleString()}\` (${chancePct}% to win)`;
@@ -370,7 +371,6 @@ function processNewBet(txn: Transaction, msg: MessageSummary): void {
     snipe.chatSend(`@${txn.fromUsername} is locked into the snipe!`);
   }
 
-  resetSnipeClock(channel);
 
 }
 
@@ -478,6 +478,7 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
 
 
     processNewBet(txn, msg);
+    resetSnipeClock(channel);
 
   }
 
@@ -741,7 +742,7 @@ function runClock(channel: ChatChannel, messageId: string, seconds: number): voi
 
       let stops_when = moment().to(snipe.betting_stops);
       if(seconds < 55) {
-        stops_when = `in %{seconds} seconds`;
+        stops_when = `in ${seconds} seconds`;
       }
 
       bot.chat.edit(channel, messageId, {
