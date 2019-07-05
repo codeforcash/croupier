@@ -216,6 +216,7 @@ function resolveFlip(channel, winningNumber) {
 function buildBettorRange(channel) {
     var bettorMap = {};
     activeSnipes[JSON.stringify(channel)].participants.forEach(function (participant) {
+        console.log('participant', participant);
         var username;
         if (typeof (participant.onBehalfOf) === "undefined") {
             var username_1 = participant.username;
@@ -223,6 +224,7 @@ function buildBettorRange(channel) {
         else {
             var username_2 = participant.onBehalfOf;
         }
+        console.log('username', username);
         if (typeof (bettorMap[username]) === "undefined") {
             bettorMap[username] = Math.floor(participant.transaction.amount / 0.01);
         }
@@ -233,14 +235,16 @@ function buildBettorRange(channel) {
     var bettorRange = {};
     var start = 0;
     Object.keys(bettorMap).forEach(function (key) {
+        console.log('bettorMap key', key);
         bettorRange[key] = [start + 1, start + bettorMap[key]];
         start += bettorMap[key];
     });
     return bettorRange;
 }
 function buildBettingTable(potSize, bettorRange) {
+    console.log('within BuildBettingTable, bettorRange:', bettorRange);
     var maxValue = Math.max.apply(Math, _.flatten(Object.values(bettorRange)));
-    var bettingTable = "Pot size: ${potSize}XLM\n";
+    var bettingTable = "Pot size: " + potSize + "XLM\n";
     Object.keys(bettorRange).forEach(function (username) {
         var chancePct = 100 * ((1 + (bettorRange[username][1] - bettorRange[username][0])) / maxValue);
         bettingTable += "\n@" + username + ": `" + bettorRange[username][0].toLocaleString() + " - " + bettorRange[username][1].toLocaleString() + "` (" + chancePct + "% to win)";
@@ -275,7 +279,6 @@ function processNewBet(txn, msg) {
         addSnipeParticipant(channel, txn, undefined);
         snipe.chatSend("@" + txn.fromUsername + " is locked into the snipe!");
     }
-    resetSnipeClock(channel);
 }
 function processTxnDetails(txn, msg) {
     var channel = msg.channel;
@@ -364,6 +367,7 @@ function processTxnDetails(txn, msg) {
             return;
         }
         processNewBet(txn, msg);
+        resetSnipeClock(channel);
     }
 }
 function calculatePotSize(channel) {
@@ -407,10 +411,11 @@ function loadActiveSnipes() {
             results.forEach(function (result) {
                 var chatThrottle = throttledQueue(5, 5000);
                 var moneyThrottle = throttledQueue(5, 5000);
-                snipes[JSON.stringify(result.channel)] = {
+                var channel = JSON.parse(result.channel);
+                snipes[JSON.stringify(channel)] = {
                     betting_open: true,
                     clock: null,
-                    participants: result.participants,
+                    participants: JSON.parse(result.participants),
                     timeout: null,
                     initialCountdown: result.initial_countdown,
                     followupCountdown: result.followup_countdown,
@@ -418,7 +423,7 @@ function loadActiveSnipes() {
                     chatSend: function (message) {
                         return new Promise(function (resolve) {
                             chatThrottle(function () {
-                                bot.chat.send(result.channel, {
+                                bot.chat.send(channel, {
                                     body: message
                                 }).then(function (messageId) {
                                     resolve(messageId);
@@ -429,7 +434,7 @@ function loadActiveSnipes() {
                     moneySend: function (amount, recipient) {
                         return new Promise(function (resolve) {
                             moneyThrottle(function () {
-                                bot.chat.sendMoneyInChat(result.channel.topicName, result.channel.name, amount.toString(), recipient).then(function (res) {
+                                bot.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient).then(function (res) {
                                     resolve(res);
                                 });
                             });
@@ -565,7 +570,7 @@ function runClock(channel, messageId, seconds) {
             }
             var stops_when = moment().to(snipe.betting_stops);
             if (seconds < 55) {
-                stops_when = "in %{seconds} seconds";
+                stops_when = "in " + seconds + " seconds";
             }
             bot.chat.edit(channel, messageId, {
                 message: {

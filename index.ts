@@ -304,6 +304,8 @@ function buildBettorRange(channel: ChatChannel): any {
       let username = participant.onBehalfOf;
     }
 
+    console.log('username', username);
+
     if (typeof(bettorMap[username]) === "undefined") {
       bettorMap[username] = Math.floor(participant.transaction.amount / 0.01);
     } else {
@@ -314,6 +316,9 @@ function buildBettorRange(channel: ChatChannel): any {
   const bettorRange: object = {};
   let start: number = 0;
   Object.keys(bettorMap).forEach((key) => {
+
+    console.log('bettorMap key', key);
+
     bettorRange[key] = [start + 1, start + bettorMap[key]];
     start += bettorMap[key];
   });
@@ -323,11 +328,13 @@ function buildBettorRange(channel: ChatChannel): any {
 
 function buildBettingTable(potSize: number, bettorRange: object): string {
 
+  console.log('within BuildBettingTable, bettorRange:', bettorRange);
 
   let maxValue = Math.max(..._.flatten(Object.values(bettorRange)));
 
   let bettingTable = `Pot size: ${potSize}XLM\n`;
   Object.keys(bettorRange).forEach((username) => {
+
     let chancePct = 100 * ( (1+(bettorRange[username][1] - bettorRange[username][0])) / maxValue);
     bettingTable += `\n@${username}: \`${bettorRange[username][0].toLocaleString()} - ${bettorRange[username][1].toLocaleString()}\` (${chancePct}% to win)`;
   });
