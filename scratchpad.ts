@@ -1,9 +1,3 @@
-import * as moment from "moment";
-
-
-let snipeDone = moment().add(70, 'seconds');
-
-console.log(moment().to(snipeDone));
 
 // /*
 
@@ -11,46 +5,75 @@ console.log(moment().to(snipeDone));
 
 // */
 
-// import * as os from "os";
-// import * as Bot from "./keybase-bot";
+import * as os from "os";
+import * as Bot from "./keybase-bot";
 
-// import "source-map-support/register";
+import "source-map-support/register";
 
-// const bot: Bot = new Bot(os.homedir());
+const bot: Bot = new Bot(os.homedir());
 
-// const botUsername: string = "croupier";
-// const paperkey: string = process.env.CROUPIER_PAPERKEY_1;
-
-
-// async function main() {
-
-// 	await bot.init(botUsername, paperkey);
-// 	console.log('initialized.');
+const botUsername: string = "croupier";
+const paperkey: string = process.env.CROUPIER_PAPERKEY_1;
 
 
-//     await bot.chat.watchAllChannelsForNewMessages(
-//       async (msg) => {
-//         try {
-//           if (msg.content.type === "text" && msg.content.text.payments && msg.content.text.payments.length === 1) {
-//             console.log(msg.content.text.body);
-//           }
-//         } catch (err) {
-//           console.error(err);
-//         }
-//       },
-//       (e) => console.error(e),
-//     );
+async function main() {
+
+	await bot.init(botUsername, paperkey);
+	console.log('initialized.');
 
 
-// 	// bot.wallet.details('7713b51be0af635e92351f0e6650aed0d644ebe3d4881b8f776477931decfdd0').then(details => {
-// 	// 	console.log('details', details.status, details.feeChargedDescription);
-// 	// 	const xlmFeeMatch = details.feeChargedDescription.match(/(\d\.\d+) XLM/);
-// 	// 	if (xlmFeeMatch !== null) {
-// 	// 		const fee = xlmFeeMatch[1]
-// 	// 		console.log('fee', fee);
-// 	// 	}
-// 	// });
+  let res = await bot.team.listTeamMemberships({
+    team: 'mkbot'
+  });
 
-// }
+  let all_members = [];
+  all_members = all_members.concat(res.members.owners.map(u => u.username));
+  all_members = all_members.concat(res.members.admins.map(u => u.username));
+  all_members = all_members.concat(res.members.writers.map(u => u.username));
+  all_members = all_members.concat(res.members.readers.map(u => u.username));
 
-// main();
+  console.log(all_members);
+
+
+
+    // await bot.chat.watchAllChannelsForNewMessages(
+    //   async (msg) => {
+    //     try {
+    //       if (msg.content.type === "flip") {
+
+    //         setInterval((() => {
+    //           try {
+    //             bot.chat.loadFlip(
+    //               msg.conversationId,
+    //               msg.content.flip.flipConvId,
+    //               msg.id,
+    //               msg.content.flip.gameId,
+    //             ).then((flipDetails) => {
+    //               if (flipDetails.phase === 2) {
+    //                 console.log("results are in");
+    //                 console.log(msg.channel, flipDetails.resultInfo.number);
+    //               } else {
+    //                 console.log("results are NOT in yet");
+    //               }
+    //             }).catch((err) => {
+    //               console.log('type 1 error');
+    //               console.log(err);
+    //             });
+    //           } catch (err) {
+    //             console.log('type 2 error');
+    //             console.log(err);
+    //           }
+    //         }), 1000);
+
+    //       }
+    //     } catch (err) {
+    //       console.error(err);
+    //     }
+    //   },
+    //   (e) => console.error(e),
+    // );
+
+
+}
+
+main();
