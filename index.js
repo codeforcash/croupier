@@ -268,6 +268,15 @@ function flip(channel) {
 }
 function processNewBet(txn, msg) {
     var channel = msg.channel;
+
+
+    if(txn.amount < 2.01) {
+        bot.chat.send(channel, {
+            body: "if sending onBehalfOf someone else, amount must be >= 2.01XLM in the event they do not already have a Keybase wallet"
+        });
+        return;
+    }
+
     var onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?(\d+)/);
     var snipe = activeSnipes[JSON.stringify(channel)];
     if (onBehalfOfMatch !== null) {
@@ -434,9 +443,8 @@ function loadActiveSnipes() {
                     moneySend: function (amount, recipient) {
                         return new Promise(function (resolve) {
                             moneyThrottle(function () {
-                                bot.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient).then(function (res) {
-                                    resolve(res);
-                                });
+                                bot.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient);
+                                resolve(true);
                             });
                         });
                     }
