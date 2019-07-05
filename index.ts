@@ -544,7 +544,7 @@ function loadActiveSnipes(): object {
         snipes[JSON.stringify(channel)] = {
           betting_open: true,
           clock: null,
-          participants: result.participants,
+          participants: JSON.parse(result.participants),
           timeout: null,
           initialCountdown: result.initial_countdown,
           followupCountdown: result.followup_countdown,
