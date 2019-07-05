@@ -551,7 +551,7 @@ function loadActiveSnipes(): object {
         let channel = JSON.parse(result.channel);
 
         snipes[JSON.stringify(channel)] = {
-          snipeId: result.snipeId,
+          snipeId: result.id,
           betting_open: true,
           clock: null,
           participants: JSON.parse(result.participants),
