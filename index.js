@@ -38,16 +38,20 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 exports.__esModule = true;
 var _ = require("lodash");
 var mysql = require("mysql");
+var moment = require("moment");
 var os = require("os");
 var Bot = require("./keybase-bot");
+var throttledQueue = require("throttled-queue");
 require("source-map-support/register");
 var bot = new Bot(os.homedir());
 var bot2 = new Bot(os.homedir());
 var botUsername = "croupier";
 var paperkey = process.env.CROUPIER_PAPERKEY_1;
 var paperkey2 = process.env.CROUPIER_PAPERKEY_2;
-function documentSnipe(channel, winner, wasCancelled) {
+var activeSnipes;
+function updateSnipeLog(channel) {
     var participants = JSON.stringify(activeSnipes[JSON.stringify(channel)].participants);
+    var snipeId = activeSnipes[JSON.stringify(channel)].snipeId;
     var connection = mysql.createConnection({
         database: process.env.MYSQL_DB,
         host: process.env.MYSQL_HOST,
@@ -55,40 +59,146 @@ function documentSnipe(channel, winner, wasCancelled) {
         user: process.env.MYSQL_USER
     });
     connection.connect();
-    if (winner !== null) {
-        winner = "'" + winner + "'";
-    }
-    connection.query("INSERT INTO snipes\n    (participants, winner, was_cancelled)\n    VALUES\n    ('" + participants + "', " + winner + ", " + wasCancelled + ")", function (error, results, fields) {
+    connection.query("UPDATE snipes SET participants=" + connection.escape(participants) + " WHERE id=" + connection.escape(snipeId), function (error, results, fields) {
         if (error) {
             console.log(error);
         }
     });
     connection.end();
 }
+function addSnipeParticipant(channel, txn, onBehalfOf) {
+    var newParticipant;
+    if (typeof (onBehalfOf) === 'undefined') {
+        newParticipant = {
+            transaction: txn,
+            username: txn.fromUsername
+        };
+    }
+    else {
+        newParticipant = {
+            transaction: txn,
+            username: txn.fromUsername,
+            onBehalfOf: onBehalfOf
+        };
+    }
+    activeSnipes[JSON.stringify(channel)].participants.push(newParticipant);
+    updateSnipeLog(channel);
+}
+function logNewSnipe(channel) {
+    return new Promise(function (resolve) {
+        var snipe = activeSnipes[JSON.stringify(channel)];
+        var connection = mysql.createConnection({
+            database: process.env.MYSQL_DB,
+            host: process.env.MYSQL_HOST,
+            password: process.env.MYSQL_PASSWORD,
+            user: process.env.MYSQL_USER
+        });
+        connection.connect();
+        connection.query("INSERT INTO snipes\n      (channel, initial_countdown, followup_countdown)\n      VALUES\n      (" + connection.escape(JSON.stringify(channel)) + ",\n      " + connection.escape(snipe.initialCountdown) + ",\n      " + connection.escape(snipe.followupCountdown) + "\n      )", function (error, results, fields) {
+            if (error) {
+                console.log(error);
+            }
+            resolve(results.insertId);
+        });
+        connection.end();
+    });
+}
+function documentSnipe(channel, reason) {
+    var snipeId = activeSnipes[JSON.stringify(channel)].snipeId;
+    var was_cancelled, winner, cancellation_reason;
+    var connection = mysql.createConnection({
+        database: process.env.MYSQL_DB,
+        host: process.env.MYSQL_HOST,
+        password: process.env.MYSQL_PASSWORD,
+        user: process.env.MYSQL_USER
+    });
+    connection.connect();
+    if (reason !== 'lack-of-participants' && reason !== 'flip-error') {
+        was_cancelled = 1;
+        winner = null;
+        cancellation_reason = reason;
+    }
+    else {
+        was_cancelled = 0;
+        winner = reason;
+        cancellation_reason = null;
+    }
+    connection.query("UPDATE snipes\n    SET\n      winner=" + connection.escape(winner) + ",\n      was_cancelled=" + connection.escape(was_cancelled) + ",\n      cancellation_reason=" + connection.escape(cancellation_reason) + ",\n      in_progress=0\n    WHERE\n      id=" + connection.escape(snipeId) + "\n    ", function (error, results, fields) {
+        if (error) {
+            console.log(error);
+        }
+    });
+    connection.end();
+}
+function calculateTransactionFees(txn) {
+    return new Promise(function (resolve) {
+        bot.wallet.details(txn.txId).then(function (details) {
+            var xlmFeeMatch = details.feeChargedDescription.match(/(\d\.\d+) XLM/);
+            if (xlmFeeMatch !== null) {
+                var fee = parseFloat(xlmFeeMatch[1]);
+                console.log('fee', fee);
+                resolve(fee);
+            }
+        });
+    });
+}
 function processRefund(txn, channel) {
+    var snipe = activeSnipes[JSON.stringify(channel)];
     console.log("refunding txn", txn);
-    // API returns a response, number of stroops
-    var transactionFees = 300 * 0.0000001;
-    console.log("refunding txn fees", transactionFees);
-    var refund = _.round(txn.amount - transactionFees, 7);
-    console.log("total refund is", refund);
-    bot.chat.sendMoneyInChat(channel.topicName, channel.name, refund.toString(), txn.fromUsername);
+    calculateTransactionFees(txn).then(function (transactionFees) {
+        console.log("not refunding txn fees", transactionFees);
+        var refund = _.round(txn.amount - transactionFees, 7);
+        console.log("total refund is", refund);
+        snipe.moneySend(refund, txn.fromUsername);
+    });
+}
+function clearSnipe(channel, reason) {
+    activeSnipes[JSON.stringify(channel)] = undefined;
+    documentSnipe(channel, reason);
 }
 function extractTxn(msg) {
     var txnId = msg.content.text.payments[0].result.sent;
-    bot.wallet.details(txnId).then(function (details) { return processTxnDetails(details, msg.channel); });
+    bot.wallet.details(txnId).then(function (details) { return processTxnDetails(details, msg); });
 }
 function sendAmountToWinner(winnerUsername, channel) {
     var bounty;
     var snipe = activeSnipes[JSON.stringify(channel)];
     bounty = 0;
+    var transactionFeePromises = [];
     snipe.participants.forEach(function (participant) {
         bounty += parseFloat(participant.transaction.amount);
-        bounty -= (300 * 0.0000001); // transaction fees for receiving the transaction
+        transactionFeePromises.push(calculateTransactionFees(participant.transaction));
     });
-    bounty = _.round(bounty, 7);
-    console.log("now rounded", bounty);
-    bot.chat.sendMoneyInChat(channel.topicName, channel.name, bounty.toString(), winnerUsername);
+    Promise.all(transactionFeePromises).then(function (values) {
+        values.forEach(function (val) {
+            bounty -= val;
+        });
+        bounty = _.round(bounty, 7);
+        console.log("now rounded", bounty);
+        //  If winnerUsername is a participant in this chat, moneySend
+        //  Otherwise, use stellar.expert.xlm method
+        bot.team.listTeamMemberships({
+            team: channel.name
+        }).then(function (res) {
+            var allMembers = [];
+            allMembers = allMembers.concat(res.members.owners.map(function (u) { return u.username; }));
+            allMembers = allMembers.concat(res.members.admins.map(function (u) { return u.username; }));
+            allMembers = allMembers.concat(res.members.writers.map(function (u) { return u.username; }));
+            allMembers = allMembers.concat(res.members.readers.map(function (u) { return u.username; }));
+            // it's possible the winner is not in the chat, that they won through a onBehalfOf contribution of someone else
+            if (allMembers.indexOf(winnerUsername) === -1) {
+                bot.wallet.send(winnerUsername, bounty.toString()).then(function (txn) {
+                    var bountyMsg = "`+" + bounty + "XLM@" + winnerUsername + "` ";
+                    bountyMsg += ":arrow_right: ";
+                    bountyMsg += "https://stellar.expert/explorer/public/tx/" + txn.txId;
+                    snipe.chatSend(bountyMsg);
+                });
+            }
+            else {
+                snipe.moneySend(bounty, winnerUsername);
+            }
+        });
+    });
 }
 function resolveFlip(channel, winningNumber) {
     var winnerUsername;
@@ -99,19 +209,25 @@ function resolveFlip(channel, winningNumber) {
         }
     });
     sendAmountToWinner(winnerUsername, channel);
-    bot.chat.send(channel, {
-        body: "Congrats to @" + winnerUsername
-    });
-    documentSnipe(channel, winnerUsername, false);
+    var snipe = activeSnipes[JSON.stringify(channel)];
+    snipe.chatSend("Congrats to @" + winnerUsername);
+    return winnerUsername;
 }
 function buildBettorRange(channel) {
     var bettorMap = {};
     activeSnipes[JSON.stringify(channel)].participants.forEach(function (participant) {
-        if (typeof (bettorMap[participant.username]) === "undefined") {
-            bettorMap[participant.username] = Math.floor(participant.transaction.amount / 0.01);
+        var username;
+        if (typeof (participant.onBehalfOf) === "undefined") {
+            var username_1 = participant.username;
         }
         else {
-            bettorMap[participant.username] += Math.floor(participant.transaction.amount / 0.01);
+            var username_2 = participant.onBehalfOf;
+        }
+        if (typeof (bettorMap[username]) === "undefined") {
+            bettorMap[username] = Math.floor(participant.transaction.amount / 0.01);
+        }
+        else {
+            bettorMap[username] += Math.floor(participant.transaction.amount / 0.01);
         }
     });
     var bettorRange = {};
@@ -122,16 +238,23 @@ function buildBettorRange(channel) {
     });
     return bettorRange;
 }
+function buildBettingTable(potSize, bettorRange) {
+    var maxValue = Math.max.apply(Math, _.flatten(Object.values(bettorRange)));
+    var bettingTable = "Pot size: ${potSize}XLM\n";
+    Object.keys(bettorRange).forEach(function (username) {
+        var chancePct = 100 * ((1 + (bettorRange[username][1] - bettorRange[username][0])) / maxValue);
+        bettingTable += "\n@" + username + ": `" + bettorRange[username][0].toLocaleString() + " - " + bettorRange[username][1].toLocaleString() + "` (" + chancePct + "% to win)";
+    });
+    return bettingTable;
+}
+;
 function flip(channel) {
     var bettorRange = buildBettorRange(channel);
     var bettingValues = Object.values(bettorRange);
     var flatBettingValues = _.flatten(bettingValues);
     var minBet = flatBettingValues.reduce(function (a, b) { return Math.min(a, b); });
     var maxBet = flatBettingValues.reduce(function (a, b) { return Math.max(a, b); });
-    var bettingTable = "Betting table\n";
-    Object.keys(bettorRange).forEach(function (username) {
-        bettingTable += "\n@" + username + ": `" + bettorRange[username][0] + " - " + bettorRange[username][1] + "`";
-    });
+    var bettingTable = buildBettingTable(calculatePotSize(channel), bettorRange);
     bot2.chat.send(channel, {
         body: bettingTable
     });
@@ -139,7 +262,8 @@ function flip(channel) {
         body: "/flip " + minBet + ".." + maxBet
     });
 }
-function processTxnDetails(txn, channel) {
+function processTxnDetails(txn, msg) {
+    var channel = msg.channel;
     if (txn.toUsername !== botUsername) {
         return;
     }
@@ -155,36 +279,103 @@ function processTxnDetails(txn, channel) {
     }
     var snipe = activeSnipes[JSON.stringify(channel)];
     if (typeof (snipe) === "undefined") {
-        launchSnipe(channel);
-        activeSnipes[JSON.stringify(channel)].participants.push({
-            transaction: txn,
-            username: txn.fromUsername
+        var initialCountdown = 60;
+        var initialCountdownMatch = msg.content.text.body.match(/initialCountdown:\s?(\d+)/);
+        if (initialCountdownMatch !== null) {
+            initialCountdown = parseInt(initialCountdownMatch[1], 10);
+            if (initialCountdown < 5 || initialCountdown > 60 * 60 * 24 * 7) {
+                initialCountdown = 60;
+                bot.chat.send(channel, {
+                    body: "Bad value of initialCountdown.  Must be >= 5 (5 seconds) && <= 604800 (7 days)"
+                });
+            }
+        }
+        var followupCountdown = 60;
+        var followupCountdownMatch = msg.content.text.body.match(/followupCountdown:\s?(\d+)/);
+        if (followupCountdownMatch !== null) {
+            followupCountdown = parseInt(followupCountdownMatch[1], 10);
+            if (followupCountdown < 5 || followupCountdown > 60 * 60 * 24 * 7) {
+                followupCountdown = 60;
+                bot.chat.send(channel, {
+                    body: "Bad value of followupCountdown.  Must be >= 5 (5 seconds) && <= 604800 (7 days)"
+                });
+            }
+        }
+        var chatThrottle_1 = throttledQueue(5, 5000);
+        var moneyThrottle_1 = throttledQueue(5, 5000);
+        activeSnipes[JSON.stringify(channel)] = {
+            betting_open: true,
+            clock: null,
+            participants: [],
+            timeout: null,
+            initialCountdown: initialCountdown,
+            followupCountdown: followupCountdown,
+            reFlips: 3,
+            chatSend: function (message) {
+                return new Promise(function (resolve) {
+                    chatThrottle_1(function () {
+                        bot.chat.send(channel, {
+                            body: message
+                        }).then(function (messageId) {
+                            resolve(messageId);
+                        });
+                    });
+                });
+            },
+            moneySend: function (amount, recipient) {
+                return new Promise(function (resolve) {
+                    moneyThrottle_1(function () {
+                        bot.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient).then(function (res) {
+                            resolve(res);
+                        });
+                    });
+                });
+            }
+        };
+        logNewSnipe(channel).then(function (snipeId) {
+            activeSnipes[JSON.stringify(channel)].snipeId = snipeId;
+            launchSnipe(channel);
         });
-    }
-    console.log("betting_open 178");
-    if (snipe.betting_open === false) {
-        bot.chat.send(channel, {
-            body: "Betting has closed - refunding"
-        });
-        processRefund(txn, channel);
         return;
     }
-    activeSnipes[JSON.stringify(channel)].participants.push({
-        transaction: txn,
-        username: txn.fromUsername
+    else {
+        if (snipe.betting_open === false) {
+            snipe.chatSend("Betting has closed - refunding");
+            // Ensure the transaction is Completed before refunding
+            setTimeout(function () {
+                processRefund(txn, channel);
+            }, 1000 * 5);
+            return;
+        }
+        var onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?(\d+)/);
+        if (onBehalfOfMatch !== null) {
+            var onBehalfOfRecipient = onBehalfOfMatch[1];
+            addSnipeParticipant(channel, txn, onBehalfOfRecipient);
+            snipe.chatSend("@" + onBehalfOfRecipient + " is locked into the snipe, thanks to @" + txn.fromUsername + "!");
+        }
+        else {
+            addSnipeParticipant(channel, txn, undefined);
+            snipe.chatSend("@" + txn.fromUsername + " is locked into the snipe!");
+        }
+        resetSnipeClock(channel);
+    }
+}
+function calculatePotSize(channel) {
+    var snipe = activeSnipes[JSON.stringify(channel)];
+    var sum = 0;
+    snipe.participants.forEach(function (participant) {
+        sum += participant.transaction.amount;
     });
-    bot.chat.send(channel, {
-        body: "@" + txn.fromUsername + " is locked into the snipe!"
-    });
-    resetSnipeClock(channel);
+    return sum;
 }
 function resetSnipeClock(channel) {
-    var snipeTimeout = 60;
-    clearTimeout(activeSnipes[JSON.stringify(channel)].timeout);
-    bot.chat["delete"](channel, activeSnipes[JSON.stringify(channel)].clock, {});
-    bot.chat.send(channel, {
-        body: "Betting stops in " + snipeTimeout + " seconds"
-    }).then(function (sentMessage) {
+    var snipe = activeSnipes[JSON.stringify(channel)];
+    snipe.chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(channel)));
+    var snipeTimeout = snipe.followupCountdown;
+    clearTimeout(snipe.timeout);
+    snipe.betting_stops = moment().add(snipeTimeout, 'seconds');
+    bot.chat["delete"](channel, snipe.clock, {});
+    snipe.chatSend("Betting stops " + moment().to(snipe.betting_stops)).then(function (sentMessage) {
         runClock(channel, sentMessage.id, snipeTimeout);
         activeSnipes[JSON.stringify(channel)].clock = sentMessage.id;
     });
@@ -193,42 +384,111 @@ function resetSnipeClock(channel) {
     }, snipeTimeout * 1000);
     activeSnipes[JSON.stringify(channel)].timeout = finalizeBetsTimeout;
 }
-var activeSnipes = {};
+function loadActiveSnipes() {
+    return new Promise(function (resolve) {
+        var snipes = {};
+        var connection = mysql.createConnection({
+            database: process.env.MYSQL_DB,
+            host: process.env.MYSQL_HOST,
+            password: process.env.MYSQL_PASSWORD,
+            user: process.env.MYSQL_USER
+        });
+        connection.connect();
+        connection.query("SELECT * FROM snipes WHERE in_progress=1", function (error, results, fields) {
+            if (error) {
+                console.log(error);
+            }
+            results.forEach(function (result) {
+                var chatThrottle = throttledQueue(5, 5000);
+                var moneyThrottle = throttledQueue(5, 5000);
+                snipes[JSON.stringify(result.channel)] = {
+                    betting_open: true,
+                    clock: null,
+                    participants: result.participants,
+                    timeout: null,
+                    initialCountdown: result.initial_countdown,
+                    followupCountdown: result.followup_countdown,
+                    reFlips: 3,
+                    chatSend: function (message) {
+                        return new Promise(function (resolve) {
+                            chatThrottle(function () {
+                                bot.chat.send(result.channel, {
+                                    body: message
+                                }).then(function (messageId) {
+                                    resolve(messageId);
+                                });
+                            });
+                        });
+                    },
+                    moneySend: function (amount, recipient) {
+                        return new Promise(function (resolve) {
+                            moneyThrottle(function () {
+                                bot.chat.sendMoneyInChat(result.channel.topicName, result.channel.name, amount.toString(), recipient).then(function (res) {
+                                    resolve(res);
+                                });
+                            });
+                        });
+                    }
+                };
+                snipes[JSON.stringify(result.channel)].chatSend('Croupier was restarted... Previous bets are still valid!');
+                snipes[JSON.stringify(result.channel)].chatSend(buildBettingTable(calculatePotSize(result.channel), buildBettorRange(result.channel)));
+                // TODO: this might be a good time to re communicate the snipe table + odds to everyone.
+                launchSnipe(result.channel);
+            });
+            resolve(snipes);
+        });
+        connection.end();
+    });
+}
 function launchSnipe(channel) {
     // Tell the channel: OK, your snipe has been accepted for routing.
-    var snipeTimeout = 60;
-    var message = "The snipe is on.  Bet in multiples of 0.01XLM.  Betting format:";
+    var snipe = activeSnipes[JSON.stringify(channel)];
+    var message = "The snipe is on (**#${activeSnipes[JSON.stringify(channel)].snipeId}**).  Bet in multiples of 0.01XLM.  Betting format:";
     message += "```+0.01XLM@" + botUsername + "```";
-    activeSnipes[JSON.stringify(channel)] = {
-        betting_open: true,
-        clock: null,
-        participants: [],
-        timeout: null
-    };
-    bot.chat.send(channel, { body: message });
-    bot.chat.send(channel, {
-        body: "Betting stops in " + snipeTimeout + " seconds"
-    }).then(function (sentMessage) {
-        runClock(channel, sentMessage.id, snipeTimeout);
-        activeSnipes[JSON.stringify(channel)].clock = sentMessage.id;
+    snipe.chatSend(message);
+    snipe.betting_stops = moment().add(snipe.initialCountdown, 'seconds');
+    snipe.chatSend("Betting stops " + moment().to(snipe.betting_stops)).then(function (sentMessage) {
+        runClock(channel, sentMessage.id, snipe.initialCountdown);
+        snipe.clock = sentMessage.id;
     });
     var finalizeBetsTimeout = setTimeout(function () {
         finalizeBets(channel);
-    }, snipeTimeout * 1000);
+    }, snipe.initialCountdown * 1000);
     activeSnipes[JSON.stringify(channel)].timeout = finalizeBetsTimeout;
 }
 function finalizeBets(channel) {
-    bot.chat.send(channel, {
-        body: "No more bets!"
-    });
-    console.log("betting_open 255");
-    activeSnipes[JSON.stringify(channel)].betting_open = false;
+    var snipe = activeSnipes[JSON.stringify(channel)];
+    snipe.chatSend("No more bets!");
+    snipe.betting_open = false;
     // Give 5 seconds to finalize transactions + 1 extra.
     setTimeout(function () {
         executeFlipOrCancel(channel);
     }, 6 * 1000);
 }
-/* TODO: check that there are _different_ participants not someone betting against themself multiple times */
+function refundAllParticipants(channel) {
+    var snipe = activeSnipes[JSON.stringify(channel)];
+    var bets = {};
+    snipe.participants.forEach(function (participant) {
+        if (typeof (bets[participant.transaction.fromUsername]) === 'undefined') {
+            var b = {
+                fees: [],
+                wagers: []
+            };
+            bets[participant.transaction.fromUsername] = b;
+        }
+        bets[participant.transaction.fromUsername].fees.push(calculateTransactionFees(participant.transaction));
+        bets[participant.transaction.fromUsername].wagers.push(participant.transaction.amount);
+    });
+    var participantList = Object.keys(bets);
+    participantList.forEach(function (participant) {
+        Promise.all(bets[participant].fees).then(function (fees) {
+            var feeSum = fees.reduce(function (a, b) { return a + b; });
+            var wagerSum = bets[participant].wagers.reduce(function (a, b) { return a + b; });
+            var refund = _.round(wagerSum - feeSum, 7);
+            snipe.moneySend(refund, participant);
+        });
+    });
+}
 function executeFlipOrCancel(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
     if (typeof (snipe) !== "undefined") {
@@ -237,54 +497,49 @@ function executeFlipOrCancel(channel) {
         if (uniqParticipants.length > 1) {
             flip(channel);
         }
-        else if (uniqParticipants.length === 1) {
-            snipe.participants.forEach(function (participant) {
-                processRefund(participant.transaction, channel);
-            });
-            bot.chat.send(channel, {
-                body: "The snipe has been cancelled due to a lack of participants."
-            });
-            documentSnipe(channel, null, true);
-            activeSnipes[JSON.stringify(channel)] = undefined;
-        }
         else {
-            bot.chat.send(channel, {
-                body: "The snipe has been cancelled due to a lack of participants."
-            });
-            documentSnipe(channel, null, true);
-            activeSnipes[JSON.stringify(channel)] = undefined;
+            refundAllParticipants(channel);
+            snipe.chatSend("The snipe has been canceled due to a lack of participants.");
+            clearSnipe(channel, 'lack-of-participants');
         }
     }
 }
 function cancelFlip(conversationId, channel, err) {
+    var snipe = activeSnipes[JSON.stringify(channel)];
     clearInterval(flipMonitorIntervals[conversationId]);
     if (typeof (activeSnipes[JSON.stringify(channel)]) !== "undefined") {
-        bot.chat.send(channel, {
-            body: "The flip has been cancelled due to error, and everyone is getting a refund"
-        });
-        activeSnipes[JSON.stringify(channel)].participants.forEach(function (participant) {
-            processRefund(participant.transaction, channel);
-        });
-        documentSnipe(channel, null, true);
-        activeSnipes[JSON.stringify(channel)] = undefined;
+        snipe.chatSend("The flip has been cancelled due to error, and everyone is getting a refund");
+        refundAllParticipants(channel);
+        clearSnipe(channel, 'flip-error');
     }
 }
 var flipMonitorIntervals = {};
 function monitorFlipResults(msg) {
+    var snipe = activeSnipes[JSON.stringify(msg.channel)];
     flipMonitorIntervals[msg.conversationId] = setInterval((function () {
         try {
             bot.chat.loadFlip(msg.conversationId, msg.content.flip.flipConvId, msg.id, msg.content.flip.gameId).then(function (flipDetails) {
                 if (flipDetails.phase === 2) {
                     console.log("results are in");
-                    resolveFlip(msg.channel, flipDetails.resultInfo.number);
+                    var winner = resolveFlip(msg.channel, flipDetails.resultInfo.number);
                     clearInterval(flipMonitorIntervals[msg.conversationId]);
-                    activeSnipes[JSON.stringify(msg.channel)] = undefined;
+                    clearSnipe(msg.channel, winner);
                 }
                 else {
                     console.log("results are NOT in", flipDetails);
                 }
             })["catch"](function (err) {
-                cancelFlip(msg.conversationId, msg.channel, err);
+                if (snipe.reFlips > 0) {
+                    snipe.chatSend('Due to error, we are going to re-flip in 60 seconds');
+                    snipe.reFlips--;
+                    setTimeout(function () {
+                        flip(msg.channel);
+                    }, 60 * 1000);
+                    clearInterval(flipMonitorIntervals[msg.conversationId]);
+                }
+                else {
+                    cancelFlip(msg.conversationId, msg.channel, err);
+                }
             });
         }
         catch (err) {
@@ -292,15 +547,26 @@ function monitorFlipResults(msg) {
         }
     }), 1000);
 }
-var allClocks = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].reverse();
 var runningClocks = {};
 function runClock(channel, messageId, seconds) {
+    var snipe = activeSnipes[JSON.stringify(channel)];
     try {
-        bot.chat.edit(channel, messageId, {
-            message: {
-                body: ":clock" + allClocks[seconds % 12].toString() + ":" + (" betting stops in " + seconds + "s")
+        // :hourglass: :hourglass_flowing_sand:
+        if (seconds % 5 === 0) {
+            var hourglass = void 0;
+            var lastDigit = JSON.stringify(seconds).slice(-1);
+            if (lastDigit === "5") {
+                hourglass = ":hourglass:";
             }
-        });
+            else {
+                hourglass = ":hourglass_flowing_sand:";
+            }
+            bot.chat.edit(channel, messageId, {
+                message: {
+                    body: hourglass + (" betting stops " + moment().to(snipe.betting_stops))
+                }
+            });
+        }
     }
     catch (e) {
         return;
@@ -312,11 +578,7 @@ function runClock(channel, messageId, seconds) {
     }
     else {
         setTimeout(function () {
-            bot.chat.edit(channel, messageId, {
-                message: {
-                    body: "~:clock" + allClocks[seconds % 12].toString() + ":" + " betting stops in 1s~ no longer accepting bets"
-                }
-            });
+            bot.chat["delete"](channel, messageId, {});
         }, 1000);
     }
 }
@@ -327,7 +589,7 @@ function main() {
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    _a.trys.push([0, 4, , 5]);
+                    _a.trys.push([0, 5, , 6]);
                     return [4 /*yield*/, bot.init(botUsername, paperkey)];
                 case 1:
                     _a.sent();
@@ -344,6 +606,9 @@ function main() {
                         body: botUsername + " was just restarted...[development mode] [use at own risk] [not functional]"
                     };
                     bot.chat.send(channel, message);
+                    return [4 /*yield*/, loadActiveSnipes()];
+                case 3:
+                    activeSnipes = _a.sent();
                     return [4 /*yield*/, bot.chat.watchAllChannelsForNewMessages(function (msg) { return __awaiter(_this, void 0, void 0, function () {
                             return __generator(this, function (_a) {
                                 try {
@@ -361,14 +626,14 @@ function main() {
                                 return [2 /*return*/];
                             });
                         }); }, function (e) { return console.error(e); })];
-                case 3:
-                    _a.sent();
-                    return [3 /*break*/, 5];
                 case 4:
+                    _a.sent();
+                    return [3 /*break*/, 6];
+                case 5:
                     error_1 = _a.sent();
                     console.error(error_1);
-                    return [3 /*break*/, 5];
-                case 5: return [2 /*return*/];
+                    return [3 /*break*/, 6];
+                case 6: return [2 /*return*/];
             }
         });
     });

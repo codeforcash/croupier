@@ -16,7 +16,19 @@ const botUsername: string = "croupier";
 const paperkey: string = process.env.CROUPIER_PAPERKEY_1;
 const paperkey2: string = process.env.CROUPIER_PAPERKEY_2;
 
+let activeSnipes: object;
+
 import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
+
+
+interface IBetData {
+  fees: Array<Promise<number>>;
+  wagers: Array<number>;
+}
+
+interface IBetList {
+  [key: string]: IBetData;
+}
 
 interface IParticipant {
   username: string;
@@ -24,7 +36,7 @@ interface IParticipant {
   onBehalfOf?: string;
 }
 
-type ThrottledChat = (channel: ChatChannel, message: string) => Promise<any>;
+type ThrottledChat = (message: string) => Promise<any>;
 type ThrottledMoneyTransfer = (xlmAmount: number, recipient: string) => Promise<any>;
 
 interface ISnipe {
@@ -32,9 +44,10 @@ interface ISnipe {
   betting_open: boolean;
   clock: string;
   timeout: NodeJS.Timeout;
+  initialCountdown: number;
   followupCountdown: number;
   snipeId: number;
-  betting_stops: Moment;
+  betting_stops: moment.Moment;
   chatSend: ThrottledChat;
   moneySend: ThrottledMoneyTransfer;
   reFlips: number;
@@ -88,33 +101,38 @@ function addSnipeParticipant(channel: ChatChannel, txn: Transaction, onBehalfOf?
   updateSnipeLog(channel);
 }
 
-async function logNewSnipe(channel: ChatChannel): void {
+function logNewSnipe(channel: ChatChannel): Promise<any> {
 
-  let snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-  const connection: mysql.Connection = mysql.createConnection({
-    database : process.env.MYSQL_DB,
-    host     : process.env.MYSQL_HOST,
-    password : process.env.MYSQL_PASSWORD,
-    user     : process.env.MYSQL_USER,
+  return new Promise((resolve) => {
+
+    let snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
+    const connection: mysql.Connection = mysql.createConnection({
+      database : process.env.MYSQL_DB,
+      host     : process.env.MYSQL_HOST,
+      password : process.env.MYSQL_PASSWORD,
+      user     : process.env.MYSQL_USER,
+    });
+
+    connection.connect();
+
+    connection.query(`INSERT INTO snipes
+      (channel, initial_countdown, followup_countdown)
+      VALUES
+      (${connection.escape(JSON.stringify(channel))},
+      ${connection.escape(snipe.initialCountdown)},
+      ${connection.escape(snipe.followupCountdown)}
+      )`, (error, results, fields) => {
+      if (error) {
+        console.log(error);
+      }
+
+      resolve(results.insertId);
+
+    });
+    connection.end();
+
   });
 
-  connection.connect();
-
-  connection.query(`INSERT INTO snipes
-    (channel, initial_countdown, followup_countdown)
-    VALUES
-    (${connection.escape(JSON.stringify(channel))},
-    ${connection.escape(snipe.initialCountdown)},
-    ${connection.escape(snipe.followupCountdown)}
-    )`, (error, results, fields) => {
-    if (error) {
-      console.log(error);
-    }
-
-    snipe.snipeId = results.insertId;
-
-  });
-  connection.end();
 }
 
 
@@ -122,6 +140,7 @@ async function logNewSnipe(channel: ChatChannel): void {
 function documentSnipe(channel: ChatChannel, reason: string): void {
 
   let snipeId = activeSnipes[JSON.stringify(channel)].snipeId;
+  let was_cancelled, winner, cancellation_reason;
 
   const connection: mysql.Connection = mysql.createConnection({
     database : process.env.MYSQL_DB,
@@ -160,7 +179,7 @@ function documentSnipe(channel: ChatChannel, reason: string): void {
   connection.end();
 }
 
-function calculateTransactionFees(txn: Transaction): Promise<any> {
+function calculateTransactionFees(txn: Transaction): Promise<number> {
   return new Promise(resolve => {
     bot.wallet.details(txn.txId).then(details => {
       const xlmFeeMatch = details.feeChargedDescription.match(/(\d\.\d+) XLM/);
@@ -177,7 +196,7 @@ function calculateTransactionFees(txn: Transaction): Promise<any> {
 
 function processRefund(txn: Transaction, channel: ChatChannel): void {
 
-  const snipe: ISnipe = activeSnipes(JSON.stringify(channel));
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
 
   console.log("refunding txn", txn);
   calculateTransactionFees(txn).then(transactionFees => {
@@ -212,7 +231,7 @@ function sendAmountToWinner(winnerUsername: string, channel: ChatChannel): void 
      transactionFeePromises.push(calculateTransactionFees(participant.transaction));
   });
 
-  Promise.all(transactionFeePromises).then((values) => {
+  Promise.all(transactionFeePromises).then((values: Array<number>) => {
     values.forEach((val) => {
       bounty -= val;
     });
@@ -222,27 +241,32 @@ function sendAmountToWinner(winnerUsername: string, channel: ChatChannel): void 
 
     //  If winnerUsername is a participant in this chat, moneySend
     //  Otherwise, use stellar.expert.xlm method
-    let res = await bot.team.listTeamMemberships({
+    bot.team.listTeamMemberships({
       team: channel.name
+    }).then((res) => {
+
+
+      let allMembers = [];
+      allMembers = allMembers.concat(res.members.owners.map(u => u.username));
+      allMembers = allMembers.concat(res.members.admins.map(u => u.username));
+      allMembers = allMembers.concat(res.members.writers.map(u => u.username));
+      allMembers = allMembers.concat(res.members.readers.map(u => u.username));
+
+      // it's possible the winner is not in the chat, that they won through a onBehalfOf contribution of someone else
+      if(allMembers.indexOf(winnerUsername) === -1) {
+        bot.wallet.send(winnerUsername, bounty.toString()).then((txn) => {
+          let bountyMsg = `\`+${bounty}XLM@${winnerUsername}\` `;
+          bountyMsg += `:arrow_right: `;
+          bountyMsg += `https://stellar.expert/explorer/public/tx/${txn.txId}`;
+          snipe.chatSend(bountyMsg);
+        });
+      }
+      else {
+        snipe.moneySend(bounty, winnerUsername);
+      }
+
+
     });
-
-    let allMembers = [];
-    allMembers = allMembers.concat(res.members.owners.map(u => u.username));
-    allMembers = allMembers.concat(res.members.admins.map(u => u.username));
-    allMembers = allMembers.concat(res.members.writers.map(u => u.username));
-    allMembers = allMembers.concat(res.members.readers.map(u => u.username));
-
-    // it's possible the winner is not in the chat, that they won through a onBehalfOf contribution of someone else
-    if(allMembers.indexOf(winnerUsername) === -1) {
-      bot.wallet.send(winnerUsername, bounty.toString()).then((txn) => {
-        let bountyMsg = `\`+${bounty}XLM@${winnerUsername}\` `;
-        bountyMsg += `:arrow_right: `;
-        bountyMsg += `https://stellar.expert/explorer/public/tx/${txn.txId}`;
-        snipe.chatSend(bountyMsg);
-      });
-    else {
-      snipe.moneySend(bounty, winnerUsername);
-    }
 
 
   });
@@ -307,7 +331,11 @@ function buildBettingTable(potSize: number, bettorRange: object): string {
     bettingTable += `\n@${username}: \`${bettorRange[username][0].toLocaleString()} - ${bettorRange[username][1].toLocaleString()}\` (${chancePct}% to win)`;
   });
 
+  return bettingTable;
+
+
 };
+
 
 function flip(channel: ChatChannel): void {
 
@@ -317,7 +345,7 @@ function flip(channel: ChatChannel): void {
   const minBet: number = flatBettingValues.reduce((a, b) => Math.min(a, b));
   const maxBet: number = flatBettingValues.reduce((a, b) => Math.max(a, b));
 
-  let bettingTable: string = buildBettingTable(bettorRange);
+  let bettingTable: string = buildBettingTable(calculatePotSize(channel), bettorRange);
 
   bot2.chat.send(channel, {
     body: bettingTable,
@@ -407,45 +435,50 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
       }
     };
 
-    await logNewSnipe(channel);
-    launchSnipe(channel);
+    logNewSnipe(channel).then((snipeId) => {
+      activeSnipes[JSON.stringify(channel)].snipeId = snipeId;
+      launchSnipe(channel);
+    });
 
-  }
-
-
-
-  if (snipe.betting_open === false) {
-
-    snipe.chatSend(`Betting has closed - refunding`);
-
-    // Ensure the transaction is Completed before refunding
-    setTimeout(function() {
-      processRefund(txn, channel);
-    }, 1000 * 5);
     return;
   }
-
-  const onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?(\d+)/);
-  if (onBehalfOfMatch !== null) {
-    onBehalfOfRecipient = onBehalfOfMatch[1];
-
-    addSnipeParticipant(channel, txn, onBehalfOfRecipient);
-
-    snipe.chatSend(`@${onBehalfOfRecipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
-  }
   else {
-    addSnipeParticipant(channel, txn, undefined);
-    snipe.chatSend(`@${txn.fromUsername} is locked into the snipe!`);
+
+    if (snipe.betting_open === false) {
+
+      snipe.chatSend(`Betting has closed - refunding`);
+
+      // Ensure the transaction is Completed before refunding
+      setTimeout(function() {
+        processRefund(txn, channel);
+      }, 1000 * 5);
+      return;
+    }
+
+    const onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?(\d+)/);
+    if (onBehalfOfMatch !== null) {
+      const onBehalfOfRecipient = onBehalfOfMatch[1];
+
+      addSnipeParticipant(channel, txn, onBehalfOfRecipient);
+
+      snipe.chatSend(`@${onBehalfOfRecipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
+    }
+    else {
+      addSnipeParticipant(channel, txn, undefined);
+      snipe.chatSend(`@${txn.fromUsername} is locked into the snipe!`);
+    }
+
+    resetSnipeClock(channel);
+
   }
 
-  resetSnipeClock(channel);
 }
 
 function calculatePotSize(channel: ChatChannel): number {
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   let sum = 0;
   snipe.participants.forEach(participant => {
-    sum += participant.txn.amount;
+    sum += participant.transaction.amount;
   });
   return sum;
 }
@@ -453,7 +486,7 @@ function calculatePotSize(channel: ChatChannel): number {
 function resetSnipeClock(channel: ChatChannel): void {
 
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-  snipe.chatSend(buildBettingTable(buildBettorRange(channel)));
+  snipe.chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(channel)));
 
   const snipeTimeout: number = snipe.followupCountdown;
 
@@ -485,7 +518,7 @@ function loadActiveSnipes(): object {
 
     connection.connect();
 
-    connection.query(`SELECT * FROM snipes WHERE in_progress=1`), (error, results, fields) => {
+    connection.query(`SELECT * FROM snipes WHERE in_progress=1`, (error, results, fields) => {
       if (error) {
         console.log(error);
       }
@@ -506,7 +539,7 @@ function loadActiveSnipes(): object {
           chatSend: (message) => {
             return new Promise(resolve => {
               chatThrottle(function() {
-                bot.chat.send(channel, {
+                bot.chat.send(result.channel, {
                   body: message
                 }).then((messageId) => {
                   resolve(messageId);
@@ -517,7 +550,7 @@ function loadActiveSnipes(): object {
           moneySend: (amount, recipient) => {
             return new Promise(resolve => {
               moneyThrottle(function() {
-                bot.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient).then((res) => {
+                bot.chat.sendMoneyInChat(result.channel.topicName, result.channel.name, amount.toString(), recipient).then((res) => {
                   resolve(res);
                 });
               });
@@ -526,7 +559,7 @@ function loadActiveSnipes(): object {
         };
 
         snipes[JSON.stringify(result.channel)].chatSend('Croupier was restarted... Previous bets are still valid!');
-        snipes[JSON.stringify(result.channel)].chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange()));
+        snipes[JSON.stringify(result.channel)].chatSend(buildBettingTable(calculatePotSize(result.channel), buildBettorRange(result.channel)));
 
         // TODO: this might be a good time to re communicate the snipe table + odds to everyone.
         launchSnipe(result.channel);
@@ -540,7 +573,7 @@ function loadActiveSnipes(): object {
   });
 }
 
-const activeSnipes: object = await loadActiveSnipes();
+
 
 function launchSnipe(channel: ChatChannel): void {
   // Tell the channel: OK, your snipe has been accepted for routing.
@@ -581,27 +614,33 @@ function finalizeBets(channel: ChatChannel): void {
   }, 6 * 1000);
 }
 
+
+
+
+
 function refundAllParticipants(channel: ChatChannel): void {
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-  const bets = {};
+  const bets: IBetList = {};
   snipe.participants.forEach((participant) => {
-    if(typeof(bets[participant.txn.fromUsername]) === 'undefined') {
-      bets[participant.txn.fromUsername] = {
+    if(typeof(bets[participant.transaction.fromUsername]) === 'undefined') {
+
+      let b: IBetData = {
         fees: [],
         wagers: [],
       };
+      bets[participant.transaction.fromUsername] = b;
+
     }
-    bets[participant.txn.fromUsername].fees.push(calculateTransactionFees(txn));
-    bets[participant.txn.fromUsername].wagers.push(txn.amount);
+    bets[participant.transaction.fromUsername].fees.push(calculateTransactionFees(participant.transaction));
+    bets[participant.transaction.fromUsername].wagers.push(participant.transaction.amount);
   });
 
-
-  const participantList = Object.keys(transactionFees);
+  const participantList = Object.keys(bets);
 
   participantList.forEach((participant) => {
-    Promise.all(bets[participant].fees).then(fees => {
-      feeSum = fees.reduce((a,b) => a+b);
-      wagerSum = bets[participant].wagers.reduce((a,b) => a+b);
+    Promise.all(bets[participant].fees).then((fees) => {
+      let feeSum: number = fees.reduce((a: number, b: number) => a + b);
+      let wagerSum: number = bets[participant].wagers.reduce((a: number, b:number) => a + b);
       let refund: number = _.round(wagerSum - feeSum, 7);
       snipe.moneySend(refund, participant);
     });
@@ -665,7 +704,7 @@ function monitorFlipResults(msg: MessageSummary): void {
           setTimeout(() => {
             flip(msg.channel);
           }, 60 *1000);
-          clearInterval(flipMonitorIntervals[conversationId]);
+          clearInterval(flipMonitorIntervals[msg.conversationId]);
         }
         else {
           cancelFlip(msg.conversationId, msg.channel, err);
@@ -735,6 +774,8 @@ async function main(): Promise<any> {
     };
 
     bot.chat.send(channel, message);
+
+    activeSnipes = await loadActiveSnipes();
 
     await bot.chat.watchAllChannelsForNewMessages(
       async (msg) => {
