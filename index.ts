@@ -332,7 +332,7 @@ function buildBettingTable(potSize: number, bettorRange: object): string {
 
   let maxValue = Math.max(..._.flatten(Object.values(bettorRange)));
 
-  let bettingTable = `Pot size: ${potSize}XLM\n`;
+  let bettingTable = `Pot size: ${potSize.toString()}XLM\n`;
   Object.keys(bettorRange).forEach((username) => {
 
     let chancePct = 100 * ( (1+(bettorRange[username][1] - bettorRange[username][0])) / maxValue);
@@ -496,7 +496,7 @@ function calculatePotSize(channel: ChatChannel): number {
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   let sum = 0;
   snipe.participants.forEach(participant => {
-    sum += participant.transaction.amount;
+    sum += parseFloat(participant.transaction.amount);
   });
   return sum;
 }
@@ -549,6 +549,7 @@ function loadActiveSnipes(): object {
         let channel = JSON.parse(result.channel);
 
         snipes[JSON.stringify(channel)] = {
+          snipeId: result.snipeId,
           betting_open: true,
           clock: null,
           participants: JSON.parse(result.participants),
