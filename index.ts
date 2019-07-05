@@ -299,9 +299,11 @@ function buildBettorRange(channel: ChatChannel): any {
     let username;
     if(typeof(participant.onBehalfOf) === "undefined") {
       let username = participant.username;
+      console.log('onBehalfOf is undefined, so username is', username);
     }
     else {
       let username = participant.onBehalfOf;
+      console.log('onBehalfOf is defined, so username is', username);
     }
 
     console.log('username', username);
