@@ -770,12 +770,17 @@ async function main(): Promise<any> {
     bot.chat.send(channel, message);
 
     activeSnipes = await loadActiveSnipes();
+
+
+    console.log('here, the active snipes we found: ');
+    console.log(activeSnipes);
+
     Object.keys(activeSnipes).forEach((chid) => {
 
       let channel = JSON.parse(chid);
       activeSnipes[chid].chatSend('Croupier was restarted... Previous bets are still valid!');
-      activeSnipes[chid].chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(result.channel)));
-      launchSnipe(result.channel);
+      activeSnipes[chid].chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(channel)));
+      launchSnipe(channel);
 
     });
 
