@@ -440,37 +440,35 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
       launchSnipe(channel);
     });
 
+  }
+
+  if (snipe.betting_open === false) {
+
+    snipe.chatSend(`Betting has closed - refunding`);
+
+    // Ensure the transaction is Completed before refunding
+    setTimeout(function() {
+      processRefund(txn, channel);
+    }, 1000 * 5);
     return;
   }
-  else {
 
-    if (snipe.betting_open === false) {
+  const onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?(\d+)/);
+  if (onBehalfOfMatch !== null) {
+    const onBehalfOfRecipient = onBehalfOfMatch[1];
 
-      snipe.chatSend(`Betting has closed - refunding`);
+    addSnipeParticipant(channel, txn, onBehalfOfRecipient);
 
-      // Ensure the transaction is Completed before refunding
-      setTimeout(function() {
-        processRefund(txn, channel);
-      }, 1000 * 5);
-      return;
-    }
-
-    const onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?(\d+)/);
-    if (onBehalfOfMatch !== null) {
-      const onBehalfOfRecipient = onBehalfOfMatch[1];
-
-      addSnipeParticipant(channel, txn, onBehalfOfRecipient);
-
-      snipe.chatSend(`@${onBehalfOfRecipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
-    }
-    else {
-      addSnipeParticipant(channel, txn, undefined);
-      snipe.chatSend(`@${txn.fromUsername} is locked into the snipe!`);
-    }
-
-    resetSnipeClock(channel);
-
+    snipe.chatSend(`@${onBehalfOfRecipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
   }
+  else {
+    addSnipeParticipant(channel, txn, undefined);
+    snipe.chatSend(`@${txn.fromUsername} is locked into the snipe!`);
+  }
+
+  resetSnipeClock(channel);
+
+
 
 }
 
@@ -575,7 +573,7 @@ function launchSnipe(channel: ChatChannel): void {
   let snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
 
 
-  let message: string = "The snipe is on (**#${activeSnipes[JSON.stringify(channel)].snipeId}**).  Bet in multiples of 0.01XLM.  Betting format:";
+  let message: string = `The snipe is on (**#${activeSnipes[JSON.stringify(channel)].snipeId}**).  Bet in multiples of 0.01XLM.  Betting format:`;
   message += `\`\`\`+0.01XLM@${botUsername}\`\`\``;
 
 
