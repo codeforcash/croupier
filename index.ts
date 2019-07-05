@@ -2,8 +2,10 @@
 
 import * as _ from "lodash";
 import * as mysql from "mysql";
+import * as moment from "moment";
 import * as os from "os";
 import * as Bot from "./keybase-bot";
+
 
 import "source-map-support/register";
 
@@ -29,6 +31,7 @@ interface ISnipe {
   timeout: NodeJS.Timeout;
   followupCountdown: number;
   snipeId: number;
+  betting_stops: Moment;
 }
 
 
@@ -380,9 +383,11 @@ function resetSnipeClock(channel: ChatChannel): void {
   const snipeTimeout: number = snipe.followupCountdown;
 
   clearTimeout(snipe.timeout);
+  snipe.betting_stops = moment().add(snipeTimeout, 'seconds');
+
   bot.chat.delete(channel, snipe.clock, {});
   bot.chat.send(channel, {
-    body: `Betting stops in ${snipeTimeout} seconds`,
+    body: `Betting stops ${moment().to(snipe.betting_stops)}`,
   }).then((sentMessage) => {
     runClock(channel, sentMessage.id, snipeTimeout);
     activeSnipes[JSON.stringify(channel)].clock = sentMessage.id;
@@ -452,8 +457,11 @@ function launchSnipe(channel: ChatChannel): void {
 
   bot.chat.send(channel, { body: message });
 
+
+  snipe.betting_stops = moment().add(snipe.initialCountdown, 'seconds');
+
   bot.chat.send(channel, {
-    body: `Betting stops in ${snipe.initialCountdown} seconds`,
+    body: `Betting stops ${moment().to(snipe.betting_stops)}`,
   }).then((sentMessage) => {
     runClock(channel, sentMessage.id, snipe.initialCountdown);
     snipe.clock = sentMessage.id;
@@ -547,16 +555,33 @@ function monitorFlipResults(msg: MessageSummary): void {
   }), 1000);
 }
 
-const allClocks: Array<number> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].reverse();
 const runningClocks: object = {};
 
 function runClock(channel: ChatChannel, messageId: string, seconds: number): void {
+
+  let snipe = activeSnipes[JSON.stringify(channel)];
   try {
-    bot.chat.edit(channel, messageId, {
-      message: {
-        body: ":clock" + allClocks[seconds % 12].toString() + ":" + ` betting stops in ${seconds}s`,
-      },
-    });
+
+    // :hourglass: :hourglass_flowing_sand:
+    if(seconds % 5 === 0) {
+
+      let hourglass;
+      let lastDigit = JSON.stringify(seconds).slice(-1);
+      if (lastDigit === "5") {
+        hourglass = ":hourglass:";
+      }
+      else {
+        hourglass = ":hourglass_flowing_sand:";
+      }
+
+      bot.chat.edit(channel, messageId, {
+        message: {
+          body: hourglass + ` betting stops ${moment().to(snipe.betting_stops)}`,
+        },
+      });
+
+    }
+
   } catch (e) {
     return;
   }
@@ -567,11 +592,7 @@ function runClock(channel: ChatChannel, messageId: string, seconds: number): voi
     }, 1000);
   } else {
     setTimeout(() => {
-      bot.chat.edit(channel, messageId, {
-        message: {
-          body: "~:clock" + allClocks[seconds % 12].toString() + ":" + ` betting stops in 1s~ no longer accepting bets`,
-        },
-      });
+      bot.chat.delete(channel, messageId, {});
     }, 1000);
   }
 }
