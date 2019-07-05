@@ -455,9 +455,8 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
       moneySend: (amount, recipient) => {
         return new Promise(resolve => {
           moneyThrottle(function() {
-            bot.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient).then((res) => {
-              resolve(res);
-            });
+            bot.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient);
+            resolve(res);
           });
         });
       }
