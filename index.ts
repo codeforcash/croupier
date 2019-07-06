@@ -346,7 +346,7 @@ function buildBettingTable(potSize: number, bettorRange: object): string {
     else {
       bettingTable += `${bettorRange[username][0].toLocaleString()} - ${bettorRange[username][1].toLocaleString()}\``
     }
-    bettingTable += `(${chancePct}% chance)`;
+    bettingTable += ` (${chancePct}% chance)`;
   });
 
   return bettingTable;
@@ -677,7 +677,7 @@ function refundAllParticipants(channel: ChatChannel): void {
 function executeFlipOrCancel(channel: ChatChannel): void {
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   if (typeof(snipe) !== "undefined") {
-    const participantUsernames: Array<string> = snipe.participants.map((participant) => participant.username);
+    const participantUsernames: Array<string> = snipe.participants.map((participant) => participant.onBehalfOf || participant.username);
     const uniqParticipants: Array<string> = _.union(participantUsernames);
     if (uniqParticipants.length > 1) {
       flip(channel);
