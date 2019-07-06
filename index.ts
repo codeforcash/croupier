@@ -655,9 +655,13 @@ function refundAllParticipants(channel: ChatChannel): void {
 
   participantList.forEach((participant) => {
     Promise.all(bets[participant].fees).then((fees) => {
+      console.log('fees', fees);
       let feeSum: number = fees.reduce((a: number, b: number) => a + b);
+      console.log('feeSum', feeSum);
       let wagerSum: number = bets[participant].wagers.reduce((a: number, b:number) => a + b);
+      console.log('wagerSum', wagerSum);
       let refund: number = _.round(wagerSum - feeSum, 7);
+      console.log('refund', refund);
       snipe.moneySend(refund, participant);
     });
   });
