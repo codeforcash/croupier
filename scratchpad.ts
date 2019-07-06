@@ -21,18 +21,34 @@ async function main() {
 	await bot.init(botUsername, paperkey);
 	console.log('initialized.');
 
+  bot.wallet.lookup('zackburt').then((acct) => {
+    console.log(acct);
 
-  let res = await bot.team.listTeamMemberships({
-    team: 'mkbot'
-  });
+    bot.wallet.balances(acct.accountId).then((balances) => {
+      console.log(balances);
+      balances.forEach((acctDetail) => {
+        console.log(acctDetail.balance[0].amount)
+      });
 
-  let all_members = [];
-  all_members = all_members.concat(res.members.owners.map(u => u.username));
-  all_members = all_members.concat(res.members.admins.map(u => u.username));
-  all_members = all_members.concat(res.members.writers.map(u => u.username));
-  all_members = all_members.concat(res.members.readers.map(u => u.username));
+    }).catch((e) => {
+      console.log(e);
+    })
 
-  console.log(all_members);
+
+  }).catch((e) => {
+    console.log(e);
+  })
+  // let res = await bot.team.listTeamMemberships({
+  //   team: 'mkbot'
+  // });
+
+  // let all_members = [];
+  // all_members = all_members.concat(res.members.owners.map(u => u.username));
+  // all_members = all_members.concat(res.members.admins.map(u => u.username));
+  // all_members = all_members.concat(res.members.writers.map(u => u.username));
+  // all_members = all_members.concat(res.members.readers.map(u => u.username));
+
+  // console.log(all_members);
 
 
 

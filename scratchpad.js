@@ -46,24 +46,25 @@ var botUsername = "croupier";
 var paperkey = process.env.CROUPIER_PAPERKEY_1;
 function main() {
     return __awaiter(this, void 0, void 0, function () {
-        var res, all_members;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0: return [4 /*yield*/, bot.init(botUsername, paperkey)];
                 case 1:
                     _a.sent();
                     console.log('initialized.');
-                    return [4 /*yield*/, bot.team.listTeamMemberships({
-                            team: 'mkbot'
-                        })];
-                case 2:
-                    res = _a.sent();
-                    all_members = [];
-                    all_members = all_members.concat(res.members.owners.map(function (u) { return u.username; }));
-                    all_members = all_members.concat(res.members.admins.map(function (u) { return u.username; }));
-                    all_members = all_members.concat(res.members.writers.map(function (u) { return u.username; }));
-                    all_members = all_members.concat(res.members.readers.map(function (u) { return u.username; }));
-                    console.log(all_members);
+                    bot.wallet.lookup('zackburt').then(function (acct) {
+                        console.log(acct);
+                        bot.wallet.balances(acct.accountId).then(function (balances) {
+                            console.log(balances);
+                            balances.forEach(function (acctDetail) {
+                                console.log(acctDetail.balance[0].amount);
+                            });
+                        })["catch"](function (e) {
+                            console.log(e);
+                        });
+                    })["catch"](function (e) {
+                        console.log(e);
+                    });
                     return [2 /*return*/];
             }
         });

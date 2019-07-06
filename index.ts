@@ -44,8 +44,7 @@ interface ISnipe {
   betting_open: boolean;
   clock: string;
   timeout: NodeJS.Timeout;
-  initialCountdown: number;
-  followupCountdown: number;
+  countdown: number;
   snipeId: number;
   betting_stops: moment.Moment;
   chatSend: ThrottledChat;
@@ -117,11 +116,10 @@ function logNewSnipe(channel: ChatChannel): Promise<any> {
     connection.connect();
 
     connection.query(`INSERT INTO snipes
-      (channel, initial_countdown, followup_countdown)
+      (channel, countdown)
       VALUES
       (${connection.escape(JSON.stringify(channel))},
-      ${connection.escape(snipe.initialCountdown)},
-      ${connection.escape(snipe.followupCountdown)}
+      ${connection.escape(snipe.countdown)}
       )`, (error, results, fields) => {
       if (error) {
         console.log(error);
@@ -152,7 +150,7 @@ function documentSnipe(channel: ChatChannel, reason: string): void {
 
   connection.connect();
 
-  if (reason !== 'lack-of-participants' && reason !== 'flip-error') {
+  if (reason === 'lack-of-participants' || reason === 'flip-error') {
     was_cancelled = 1;
     winner = null;
     cancellation_reason = reason;
@@ -373,15 +371,52 @@ function flip(channel: ChatChannel): void {
   });
 }
 
+function checkWalletBalance(username: string): Promise<any> {
+  let balance = 0;
+  return new Promise(resolve => {
+    bot.wallet.lookup(username).then((acct) => {
+      console.log(acct);
+      bot.wallet.balances(acct.accountId).then((balances) => {
+        console.log(balances);
+        balances.forEach((acctDetail) => {
+          console.log(acctDetail.balance[0].amount)
+          balance += parseFloat(acctDetail.balance[0].amount);
+        });
+        resolve(balance);
+      }).catch((e) => {
+        console.log(e);
+        resolve(null);
+      })
+
+    }).catch((e) => {
+      console.log(e);
+      resolve(null);
+    })
+  });
+}
+
 function processNewBet(txn: Transaction, msg: MessageSummary): void {
 
   const channel = msg.channel;
-  const onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?@?(\w+)/i);
+  const onBehalfOfMatch = msg.content.text.body.match(/(for|4):\s?@?(\w+)/i);
   const snipe = activeSnipes[JSON.stringify(channel)];
   if (onBehalfOfMatch !== null) {
-    const onBehalfOfRecipient = onBehalfOfMatch[1];
-    addSnipeParticipant(channel, txn, onBehalfOfRecipient);
-    snipe.chatSend(`@${onBehalfOfRecipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
+    const onBehalfOfRecipient = onBehalfOfMatch[2];
+
+    // check if the onBehalfOf user already has a wallet with bot.wallet.lookup(username);
+    // if not, restrict the onBehalfOf wager to >= 2.01XLM, Keybase's minimum xfer for
+    // new wallets
+    checkWalletBalance(onBehalfOfRecipient).then((balance) => {
+      if (balance === null || balance < 2.01) {
+        snipe.chatSend('Betting on behalf of someone else?  Seems like they do not have a wallet yet, so your bet must be at least 2.01XLM');
+        processRefund(txn, msg.channel);
+      }
+      else {
+        addSnipeParticipant(channel, txn, onBehalfOfRecipient);
+        snipe.chatSend(`@${onBehalfOfRecipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
+        bot.chat.react(channel, msg.id, ':gift:');
+      }
+    });
   }
   else {
     addSnipeParticipant(channel, txn, undefined);
@@ -412,27 +447,14 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
   let snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   if (typeof(snipe) === "undefined") {
 
-
-    let initialCountdown: number = 60;
-    const initialCountdownMatch = msg.content.text.body.match(/initialCountdown:\s?(\d+)/i);
-    if (initialCountdownMatch !== null) {
-      initialCountdown = parseInt(initialCountdownMatch[1], 10);
-      if (initialCountdown < 5 || initialCountdown > 60 * 60 * 24 * 7) {
-        initialCountdown = 60;
+    let countdown: number = 60;
+    const countdownMatch = msg.content.text.body.match(/countdown:\s?(\d+)/i);
+    if (countdownMatch !== null) {
+      countdown = parseInt(countdownMatch[1], 10);
+      if (countdown < 5 || countdown > 60 * 60 * 24 * 7) {
+        countdown = 60;
         bot.chat.send(channel, {
-          body: `Bad value of initialCountdown.  Must be >= 5 (5 seconds) && <= 604800 (7 days)`,
-        });
-      }
-    }
-
-    let followupCountdown: number = 60;
-    const followupCountdownMatch = msg.content.text.body.match(/followupCountdown:\s?(\d+)/i);
-    if (followupCountdownMatch !== null) {
-      followupCountdown = parseInt(followupCountdownMatch[1], 10);
-      if (followupCountdown < 5 || followupCountdown > 60 * 60 * 24 * 7) {
-        followupCountdown = 60;
-        bot.chat.send(channel, {
-          body: `Bad value of followupCountdown.  Must be >= 5 (5 seconds) && <= 604800 (7 days)`,
+          body: `Bad value of countdown.  Must be >= 5 (5 seconds) && <= 604800 (7 days)`,
         });
       }
     }
@@ -446,8 +468,7 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
       clock: null,
       participants: [],
       timeout: null,
-      initialCountdown: initialCountdown,
-      followupCountdown: followupCountdown,
+      countdown: countdown,
       reFlips: 3,
       chatSend: (message) => {
         return new Promise(resolve => {
@@ -471,7 +492,6 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
     };
 
     logNewSnipe(channel).then((snipeId) => {
-
       snipe = activeSnipes[JSON.stringify(channel)];
       snipe.snipeId = snipeId;
       launchSnipe(channel);
@@ -510,25 +530,33 @@ function calculatePotSize(channel: ChatChannel): number {
   return sum;
 }
 
+function getTimeLeft(timeout: NodeJS.Timeout): number {
+  return Math.ceil((timeout._idleStart + timeout._idleTimeout)/1000 - process.uptime());
+}
+
+
 function resetSnipeClock(channel: ChatChannel): void {
 
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   snipe.chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(channel)));
 
-  const snipeTimeout: number = snipe.followupCountdown;
-
+  let timeRemaining: number = getTimeLeft(snipe.timeout);
   clearTimeout(snipe.timeout);
-  snipe.betting_stops = moment().add(snipeTimeout, 'seconds');
+
+  let boost = Math.floor(0.10 * snipe.countdown);
+  let timerEndsInSeconds = timeRemaining + boost;
+
+  snipe.betting_stops = moment().add(timerEndsInSeconds, 'seconds');
 
   bot.chat.delete(channel, snipe.clock, {});
   snipe.chatSend(`Betting stops ${moment().to(snipe.betting_stops)}`).then((sentMessage) => {
-    runClock(channel, sentMessage.id, snipeTimeout);
-    activeSnipes[JSON.stringify(channel)].clock = sentMessage.id;
+    runClock(channel, sentMessage.id, timerEndsInSeconds);
+    snipe.clock = sentMessage.id;
   });
   const finalizeBetsTimeout: NodeJS.Timeout = setTimeout(() => {
     finalizeBets(channel);
-  }, snipeTimeout * 1000);
-  activeSnipes[JSON.stringify(channel)].timeout = finalizeBetsTimeout;
+  }, timerEndsInSeconds * 1000);
+  snipe.timeout = finalizeBetsTimeout;
 
 }
 
@@ -563,8 +591,7 @@ function loadActiveSnipes(): object {
           clock: null,
           participants: JSON.parse(result.participants),
           timeout: null,
-          initialCountdown: result.initial_countdown,
-          followupCountdown: result.followup_countdown,
+          countdown: result.countdown,
           reFlips: 3,
           chatSend: (message) => {
             return new Promise(resolve => {
@@ -610,16 +637,16 @@ function launchSnipe(channel: ChatChannel): void {
   snipe.chatSend(message);
 
 
-  snipe.betting_stops = moment().add(snipe.initialCountdown, 'seconds');
+  snipe.betting_stops = moment().add(snipe.countdown, 'seconds');
 
   snipe.chatSend(`Betting stops ${moment().to(snipe.betting_stops)}`).then((sentMessage) => {
-    runClock(channel, sentMessage.id, snipe.initialCountdown);
+    runClock(channel, sentMessage.id, snipe.countdown);
     snipe.clock = sentMessage.id;
   });
 
   const finalizeBetsTimeout: NodeJS.Timeout = setTimeout(() => {
     finalizeBets(channel);
-  }, snipe.initialCountdown * 1000);
+  }, snipe.countdown * 1000);
   activeSnipes[JSON.stringify(channel)].timeout = finalizeBetsTimeout;
 
 }
