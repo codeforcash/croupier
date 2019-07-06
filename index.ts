@@ -51,6 +51,7 @@ interface ISnipe {
   chatSend: ThrottledChat;
   moneySend: ThrottledMoneyTransfer;
   reFlips: number;
+  reflipping: boolean;
 }
 
 
@@ -338,7 +339,14 @@ function buildBettingTable(potSize: number, bettorRange: object): string {
   Object.keys(bettorRange).forEach((username) => {
 
     let chancePct = 100 * ( (1+(bettorRange[username][1] - bettorRange[username][0])) / maxValue);
-    bettingTable += `\n@${username}: \`${bettorRange[username][0].toLocaleString()} - ${bettorRange[username][1].toLocaleString()}\` (${chancePct}% to win)`;
+    bettingTable += `\n@${username}: \``;
+    if(bettorRange[username][0] === bettorRange[username][1]) {
+      bettingTable += `${bettorRange[username][0]}\``;
+    }
+    else {
+      bettingTable += `${bettorRange[username][0].toLocaleString()} - ${bettorRange[username][1].toLocaleString()}\``
+    }
+    bettingTable += `(${chancePct}% chance)`;
   });
 
   return bettingTable;
@@ -368,7 +376,7 @@ function flip(channel: ChatChannel): void {
 function processNewBet(txn: Transaction, msg: MessageSummary): void {
 
   const channel = msg.channel;
-  const onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?(\d+)/);
+  const onBehalfOfMatch = msg.content.text.body.match(/onBehalfOf:\s?@?(\w+)/i);
   const snipe = activeSnipes[JSON.stringify(channel)];
   if (onBehalfOfMatch !== null) {
     const onBehalfOfRecipient = onBehalfOfMatch[1];
@@ -406,7 +414,7 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
 
 
     let initialCountdown: number = 60;
-    const initialCountdownMatch = msg.content.text.body.match(/initialCountdown:\s?(\d+)/);
+    const initialCountdownMatch = msg.content.text.body.match(/initialCountdown:\s?(\d+)/i);
     if (initialCountdownMatch !== null) {
       initialCountdown = parseInt(initialCountdownMatch[1], 10);
       if (initialCountdown < 5 || initialCountdown > 60 * 60 * 24 * 7) {
@@ -418,7 +426,7 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
     }
 
     let followupCountdown: number = 60;
-    const followupCountdownMatch = msg.content.text.body.match(/followupCountdown:\s?(\d+)/);
+    const followupCountdownMatch = msg.content.text.body.match(/followupCountdown:\s?(\d+)/i);
     if (followupCountdownMatch !== null) {
       followupCountdown = parseInt(followupCountdownMatch[1], 10);
       if (followupCountdown < 5 || followupCountdown > 60 * 60 * 24 * 7) {
@@ -716,10 +724,12 @@ function monitorFlipResults(msg: MessageSummary): void {
           console.log("results are NOT in", flipDetails);
         }
       }).catch((err) => {
-        if(snipe.reFlips > 0) {
+        if (snipe.reFlips > 0 && !snipe.reflipping) {
           snipe.chatSend('Due to error, we are going to re-flip in 60 seconds');
           snipe.reFlips--;
+          snipe.reflipping = true;
           setTimeout(() => {
+            snipe.reflipping = false;
             flip(msg.channel);
           }, 60 *1000);
           clearInterval(flipMonitorIntervals[msg.conversationId]);
@@ -822,6 +832,11 @@ async function main(): Promise<any> {
 
     await bot.chat.watchAllChannelsForNewMessages(
       async (msg) => {
+
+        if(msg.channel.topicName !== "test3") {
+          return;
+        }
+
         try {
           if (msg.content.type === "flip" && msg.sender.username === botUsername) {
             monitorFlipResults(msg);
