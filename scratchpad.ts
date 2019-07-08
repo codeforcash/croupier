@@ -7,6 +7,7 @@
 
 import * as os from "os";
 import * as Bot from "./keybase-bot";
+import * as _ from "lodash";
 
 import "source-map-support/register";
 
@@ -18,26 +19,10 @@ const paperkey: string = process.env.CROUPIER_PAPERKEY_1;
 
 async function main() {
 
-	await bot.init(botUsername, paperkey);
+  await bot.init(botUsername, paperkey);
 	console.log('initialized.');
 
-  bot.wallet.lookup('zackburt').then((acct) => {
-    console.log(acct);
 
-    bot.wallet.balances(acct.accountId).then((balances) => {
-      console.log(balances);
-      balances.forEach((acctDetail) => {
-        console.log(acctDetail.balance[0].amount)
-      });
-
-    }).catch((e) => {
-      console.log(e);
-    })
-
-
-  }).catch((e) => {
-    console.log(e);
-  })
   // let res = await bot.team.listTeamMemberships({
   //   team: 'mkbot'
   // });
@@ -51,45 +36,40 @@ async function main() {
   // console.log(all_members);
 
 
+  const channel: object = {
+    membersType: "team", name: "mkbot", public: false, topicName: "test3", topicType: "chat",
+  };
 
-    // await bot.chat.watchAllChannelsForNewMessages(
-    //   async (msg) => {
-    //     try {
-    //       if (msg.content.type === "flip") {
+  bot.chat.send(channel, {
+    body: 'This is a test'
+  }).then((msgData) => {
+    console.log(msgData);
+    bot.chat.react(channel, msgData.id, '@zackburt').then((msgId) => {
+      console.log('this is the msg id from the reaction itself....', msgId.id);
+    });
+  })
 
-    //         setInterval((() => {
-    //           try {
-    //             bot.chat.loadFlip(
-    //               msg.conversationId,
-    //               msg.content.flip.flipConvId,
-    //               msg.id,
-    //               msg.content.flip.gameId,
-    //             ).then((flipDetails) => {
-    //               if (flipDetails.phase === 2) {
-    //                 console.log("results are in");
-    //                 console.log(msg.channel, flipDetails.resultInfo.number);
-    //               } else {
-    //                 console.log("results are NOT in yet");
-    //               }
-    //             }).catch((err) => {
-    //               console.log('type 1 error');
-    //               console.log(err);
-    //             });
-    //           } catch (err) {
-    //             console.log('type 2 error');
-    //             console.log(err);
-    //           }
-    //         }), 1000);
-
-    //       }
-    //     } catch (err) {
-    //       console.error(err);
-    //     }
-    //   },
-    //   (e) => console.error(e),
-    // );
-
-
+  await bot.chat.watchAllChannelsForNewMessages(
+    async (msg) => {
+      try {
+        console.log(msg);
+        if(msg.content.type === 'reaction') {
+          let reactionId = msg.id;
+          let reaction = msg.content.reaction;
+          // reaction.m; // messageId they are reacting to
+          // reaction.b; // the reaction itself
+          console.log('They are reacting to: ', reaction.m); // parent message id.  NOT the reaction id.
+        }
+        if(msg.content.type === 'delete') {
+          let deleteReactionIds = msg.content.delete.messageIDs;
+          console.log('delete reaction IDs', deleteReactionIds); // reaction id.
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    },
+    (e) => console.error(e),
+  );
 }
 
 main();

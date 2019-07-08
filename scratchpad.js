@@ -40,33 +40,18 @@ exports.__esModule = true;
 // */
 var os = require("os");
 var Bot = require("./keybase-bot");
+var _ = require("lodash");
 require("source-map-support/register");
 var bot = new Bot(os.homedir());
 var botUsername = "croupier";
 var paperkey = process.env.CROUPIER_PAPERKEY_1;
 function main() {
     return __awaiter(this, void 0, void 0, function () {
+        var arr;
         return __generator(this, function (_a) {
-            switch (_a.label) {
-                case 0: return [4 /*yield*/, bot.init(botUsername, paperkey)];
-                case 1:
-                    _a.sent();
-                    console.log('initialized.');
-                    bot.wallet.lookup('zackburt').then(function (acct) {
-                        console.log(acct);
-                        bot.wallet.balances(acct.accountId).then(function (balances) {
-                            console.log(balances);
-                            balances.forEach(function (acctDetail) {
-                                console.log(acctDetail.balance[0].amount);
-                            });
-                        })["catch"](function (e) {
-                            console.log(e);
-                        });
-                    })["catch"](function (e) {
-                        console.log(e);
-                    });
-                    return [2 /*return*/];
-            }
+            arr = [1, 2, 3];
+            console.log(_.sample(arr));
+            return [2 /*return*/];
         });
     });
 }
