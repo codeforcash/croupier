@@ -23,46 +23,56 @@ async function main() {
 	console.log('initialized.');
 
 
-  // let res = await bot.team.listTeamMemberships({
-  //   team: 'mkbot'
-  // });
-
-  // let all_members = [];
-  // all_members = all_members.concat(res.members.owners.map(u => u.username));
-  // all_members = all_members.concat(res.members.admins.map(u => u.username));
-  // all_members = all_members.concat(res.members.writers.map(u => u.username));
-  // all_members = all_members.concat(res.members.readers.map(u => u.username));
-
-  // console.log(all_members);
 
 
-  const channel: object = {
-    membersType: "team", name: "mkbot", public: false, topicName: "test3", topicType: "chat",
-  };
-
-  bot.chat.send(channel, {
-    body: 'This is a test'
-  }).then((msgData) => {
-    console.log(msgData);
-    bot.chat.react(channel, msgData.id, '@zackburt').then((msgId) => {
-      console.log('this is the msg id from the reaction itself....', msgId.id);
+function monitorFlip(msg) {
+  try {
+    bot.chat.loadFlip(
+      msg.conversationId,
+      msg.content.flip.flipConvId,
+      msg.id,
+      msg.content.flip.gameId,
+    ).then((flipDetails) => {
+      console.log('flip details', flipDetails);
+    }).catch((err) => {
+      console.log('err', err);
     });
-  })
+  } catch (err) {
+    console.log('err', err);
+  }
+
+
+}
+
+
 
   await bot.chat.watchAllChannelsForNewMessages(
     async (msg) => {
       try {
         console.log(msg);
-        if(msg.content.type === 'reaction') {
-          let reactionId = msg.id;
-          let reaction = msg.content.reaction;
-          // reaction.m; // messageId they are reacting to
-          // reaction.b; // the reaction itself
-          console.log('They are reacting to: ', reaction.m); // parent message id.  NOT the reaction id.
-        }
-        if(msg.content.type === 'delete') {
-          let deleteReactionIds = msg.content.delete.messageIDs;
-          console.log('delete reaction IDs', deleteReactionIds); // reaction id.
+        if (msg.content.type === "flip") {
+          monitorFlip(msg);
+
+          console.log(
+          {
+            conversationId: msg.conversationId,
+            flipConvId: msg.content.flip.flipConvId,
+            msgId: msg.id,
+            gameId: msg.content.flip.gameId,
+          }
+          );
+
+          bot.chat.getFlipData(msg.conversationId,
+            msg.content.flip.flipConversationId,
+            msg.id,
+            msg.content.flip.gameId).then((res) => {
+            console.log('getflipdata res!');
+            console.log(res);
+          });
+
+
+
+          return;
         }
       } catch (err) {
         console.error(err);
@@ -73,3 +83,29 @@ async function main() {
 }
 
 main();
+
+// {"method": "send", "params": {"options": {"channel": {"name": "mkbot", "members_type": "team", "topic_name": "test3"}, "message": {"body": "test"}}}}
+
+
+// conversationId: '',
+//   flipConvId: '',
+//   msgId: 7474,
+//   gameId: ''
+
+// keybase chat api -m '{"method": "loadflip", "params": {"options": {"conversation_id": "000044e620fef1e84b623350faff06ebef7a0cd7e403ba81a1b35d311976b9f6", "flip_conversation_id": "000076eed094f4f90020f18a058e772948a2666f0fd638570e2cd80925f51d67", "msg_id": 7474, "game_id": "5982849cac921d68528468ac"}}}'
+
+
+
+  // const channel: object = {
+  //   membersType: "team", name: "mkbot", public: false, topicName: "test3", topicType: "chat",
+  // };
+
+  // bot.chat.send(channel, {
+  //   body: 'This is a test'
+  // }).then((msgData) => {
+  //   console.log(msgData);
+  //   bot.chat.react(channel, msgData.id, '@zackburt').then((msgId) => {
+  //     console.log('this is the msg id from the reaction itself....', msgId.id);
+  //   });
+  // })
+

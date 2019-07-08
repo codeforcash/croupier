@@ -62,8 +62,6 @@ interface ISnipe {
   betting_stops: moment.Moment;
   chatSend: ThrottledChat;
   moneySend: ThrottledMoneyTransfer;
-  reFlips: number;
-  reflipping: boolean;
   positionSizes: Array<IPositionSize>;
 }
 
@@ -415,11 +413,41 @@ function buildBettingTable(potSize: number, bettorRange: object): string {
 
   return bettingTable;
 
-
 };
 
+function makeSubteamForFlip(channel: ChatChannel) {
 
-function flip(channel: ChatChannel): void {
+  const snipe = activeSnipes[JSON.stringify(channel)];
+  const subteamName = `codeforcash.${snipeId}`;
+
+  let usernamesToAdd = [{"username": "croupier", "role": "admin"}];
+  Object.keys(snipe.positionSizes).forEach(username => {
+    usernamesToAdd.push({
+      "username": username,
+      "role": "reader"
+    });
+  });
+  bot.team.createSubteam(subteamName).then(res => {
+    bot.team.addMembers({
+      "team": subteamName,
+      "usernames": usernamesToAdd
+    }).then(res => {
+      console.log(res);
+      const newSubteam: ChatChannel = {
+        membersType: "team", name: subteamName,
+      };
+      flip(channel, newSubteam);
+    });
+  });
+
+}
+
+
+function flip(channel: ChatChannel, whereToFlip: ChatChannel): void {
+
+  if(typeof(whereToFlip) === 'undefined') {
+    whereToFlip = channel;
+  }
 
   const bettorRange: object = buildBettorRange(channel);
   const bettingValues: Array<Array<number>> = Object.values(bettorRange);
@@ -659,7 +687,6 @@ function loadActiveSnipes(): object {
           participants: JSON.parse(result.participants),
           timeout: null,
           countdown: result.countdown,
-          reFlips: 3,
           positionSizes: JSON.parse(result.position_sizes),
           chatSend: (message) => {
             return new Promise(resolve => {
@@ -796,11 +823,25 @@ function cancelFlip(conversationId: string, channel: ChatChannel, err: Error): v
   }
 }
 
+// TODO: Implement this.
+function getChannelFromSnipeId(snipeId: number): ChatChannel {
+  return;
+}
+
 const flipMonitorIntervals: object = {};
 
 function monitorFlipResults(msg: MessageSummary): void {
 
-  const snipe = activeSnipes[JSON.stringify(msg.channel)];
+  let channelMatch = msg.channel.name.match(/codeforcash.croupier(\d+)/);
+  if(channelMatch === null) {
+    const snipe = activeSnipes[JSON.stringify(msg.channel)];
+    const ourChannel = false;
+  }
+  else {
+    const snipe = activeSnipes[JSON.stringify(getChannelFromSnipeId(channelMatch[1]))];
+    const ourChannel = true;
+  }
+
 
   flipMonitorIntervals[msg.conversationId] = setInterval((() => {
     try {
@@ -815,22 +856,24 @@ function monitorFlipResults(msg: MessageSummary): void {
           let winner = resolveFlip(msg.channel, flipDetails.resultInfo.number);
           clearInterval(flipMonitorIntervals[msg.conversationId]);
           clearSnipe(msg.channel, winner);
+          if(ourChannel) {
+            // WISHLIST?: set Timeout to remove the team in ~15 minutes
+          }
         } else {
           console.log("results are NOT in", flipDetails);
         }
       }).catch((err) => {
-        if (snipe.reFlips > 0 && !snipe.reflipping) {
-          snipe.chatSend('Due to error, we are going to re-flip in 60 seconds');
-          snipe.reFlips--;
-          snipe.reflipping = true;
-          setTimeout(() => {
-            snipe.reflipping = false;
-            flip(msg.channel);
-          }, 60 *1000);
-          clearInterval(flipMonitorIntervals[msg.conversationId]);
+
+        if(ourChannel) {
+          // extract the name of the offender
+          // remove the offender from the team
+          // clear the interval
+          // run the flip again
         }
         else {
-          cancelFlip(msg.conversationId, msg.channel, err);
+          snipe.chatSend('Due to error, we are going to re-cast the flip in a separate subteam over which we have governance and can kick anyone with a duplicate registration.');
+          flipInOurTeam(msg.channel)
+          clearInterval(flipMonitorIntervals[msg.conversationId]);
         }
       });
     } catch (err) {
@@ -968,6 +1011,7 @@ function consumePowerup(channel: ChatChannel, powerup: IPowerup) {
       // nothing.
       break;
   }
+  updateSnipeLog(channel);
   resetSnipeClock(channel);
 }
 
@@ -975,7 +1019,6 @@ function checkForPopularityContestVote(msg: MessageSummary) {
   const snipe = activeSnipes[JSON.stringify(msg.channel)];
   const reactionId = msg.id;
   const reaction = msg.content.reaction;
-  // reaction.m; // messageId they are reacting to
   snipe.popularityContests.forEach((contest) => {
     if(contest.pollMessageId === reaction.m) {
       if(reaction.b === contest.leader) {

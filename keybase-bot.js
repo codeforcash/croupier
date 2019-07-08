@@ -648,12 +648,51 @@ class ClientBase {
 class Chat extends ClientBase {
 
 
+  // Custom function that returns more information than the keybase-bot method,
+  // which doesn't provide error data nicely.
+  getFlipData(conversationId, flipConversationId, msgId, gameId) {
+
+    console.log('working dir and homedir:');
+    console.log(this._workingDir);
+    console.log(this.homeDir);
+
+    const stdout = [];
+    const stderr = [];
+
+    const child = child_process.spawn('/home/keybase/croupier/scripts/getflipdata.sh',
+      [conversationId, flipConversationId, msgId, gameId, this._workingDir, this.homeDir]);
+
+    return new Promise(resolve => {
+
+     child.stdout.on('data', (data) => {
+        console.log(`stdout: ${data}`);
+        stdout.push(data);
+      });
+
+      child.stderr.on('data', (data) => {
+        console.log(`stderr: ${data}`);
+        stderr.push(data);
+      });
+
+      child.on('close', (code) => {
+        console.log(`child process exited with code ${code}`);
+        resolve(true, stdout, stderr);
+      });
+
+      child.on('error', (err) => {
+        console.log(`child process errored with err ${err}`);
+        resolve(err, stdout, stderr);
+      });
+
+    });
+
+  }
+
 
   sendMoneyInChat(channel, team, amount, recipient) {
 
-
     console.log('sendMoneyInChat: 1');
-    const child = child_process.spawn('/home/keybase/scripts/sendmoney.sh',
+    const child = child_process.spawn('/home/keybase/croupier/scripts/sendmoney.sh',
       [channel, team, amount, recipient, this._workingDir, this.homeDir]);
 
 
@@ -672,8 +711,6 @@ class Chat extends ClientBase {
     child.on('error', (err) => {
       console.log(`child process errored with err ${err}`);
     });
-
-
 
   }
 
@@ -1412,6 +1449,43 @@ class Wallet extends ClientBase {
 
 /** The wallet module of your Keybase bot. For more info about the API this module uses, you may want to check out `keybase wallet api`. */
 class Team extends ClientBase {
+
+
+  createSubteam(name) {
+
+
+    return new Promise(resolve => {
+
+      const child = child_process.spawn('/home/keybase/croupier/scripts/createteam.sh',
+      [name, this._workingDir, this.homeDir]);
+
+
+      child.stdout.on('data', (data) => {
+        console.log(`stdout: ${data}`);
+      });
+
+      child.stderr.on('data', (data) => {
+        console.log(`stderr: ${data}`);
+      });
+
+      child.on('close', (code) => {
+        console.log(`child process exited with code ${code}`);
+        resolve(true);
+      });
+
+      child.on('error', (err) => {
+        console.log(`child process errored with err ${err}`);
+        resolve(false);
+      });
+
+
+    });
+
+
+
+  }
+
+
   /**
    * Add a bunch of people with different privileges to a team
    * @memberof Team
