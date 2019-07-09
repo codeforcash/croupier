@@ -555,6 +555,10 @@ function processNewBet(txn: Transaction, msg: MessageSummary): Promise<boolean> 
           processRefund(txn, msg.channel);
           resolve(false);
         }
+        else if (typeof(snipe.positionSizes[txn.fromUsername]) === 'undefined') {
+          snipe.chatSend('You cannot bet on behalf of someone else unless you are participating as well');
+          resolve(false);
+        }
         else {
           addSnipeParticipant(channel, txn, onBehalfOfRecipient);
           snipe.chatSend(`@${onBehalfOfRecipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
@@ -1126,7 +1130,8 @@ function consumePowerup(channel: ChatChannel, powerup: IPowerup) {
   powerup.usedAt = +new Date;
   switch(powerup.award.name) {
     case 'half-life':  // Cut the remaining time in half
-      snipe.countdown = Math.floor(snipe.countdown / 2.0);
+      let timeToSubstract: number = Math.floor(getTimeLeft(snipe) / 2.0);
+      snipe.betting_stops = snipe.betting_stops.subtract(timeToSubstract, 'seconds');
       break;
     case 'double-life': // Double the remaining time
       snipe.betting_stops = snipe.betting_stops.add(snipe.countdown, 'seconds');
