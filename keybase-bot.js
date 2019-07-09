@@ -15,6 +15,12 @@ var fs = require('fs');
 var fs__default = _interopDefault(fs);
 var path = _interopDefault(require('path'));
 
+if(process.env.DEVELOPMENT == true) {
+  const croupierDirectory = '.';
+}
+else {
+  const croupierDirectory = '/home/keybase/croupier';
+}
 /**
   Takes a Keybase API input JavaScript object and recursively formats it into snake_case or kebab-case instead of camelCase for the service.
   * @ignore
@@ -659,7 +665,7 @@ class Chat extends ClientBase {
     const stdout = [];
     const stderr = [];
 
-    const child = child_process.spawn('/home/keybase/croupier/scripts/getflipdata.sh',
+    const child = child_process.spawn(`${croupierDirectory}/scripts/getflipdata.sh`,
       [conversationId, flipConversationId, msgId, gameId, this._workingDir, this.homeDir]);
 
     return new Promise(resolve => {
@@ -692,7 +698,7 @@ class Chat extends ClientBase {
   sendMoneyInChat(channel, team, amount, recipient) {
 
     console.log('sendMoneyInChat: 1');
-    const child = child_process.spawn('/home/keybase/croupier/scripts/sendmoney.sh',
+    const child = child_process.spawn(`${croupierDirectory}/scripts/sendmoney.sh`,
       [channel, team, amount, recipient, this._workingDir, this.homeDir]);
 
 
@@ -1456,7 +1462,7 @@ class Team extends ClientBase {
 
     return new Promise(resolve => {
 
-      const child = child_process.spawn('/home/keybase/croupier/scripts/createteam.sh',
+      const child = child_process.spawn(`${croupierDirectory}/scripts/createteam.sh`,
       [name, this._workingDir, this.homeDir]);
 
 
