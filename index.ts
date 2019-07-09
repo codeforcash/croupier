@@ -418,7 +418,7 @@ function buildBettingTable(potSize: number, bettorRange: object): string {
 function makeSubteamForFlip(channel: ChatChannel) {
 
   const snipe = activeSnipes[JSON.stringify(channel)];
-  const subteamName = `codeforcash.${snipeId}`;
+  const subteamName = `codeforcash.croupier${snipeId}`;
 
   let usernamesToAdd = [{"username": "croupier", "role": "admin"}];
   Object.keys(snipe.positionSizes).forEach(username => {
@@ -432,7 +432,6 @@ function makeSubteamForFlip(channel: ChatChannel) {
       "team": subteamName,
       "usernames": usernamesToAdd
     }).then(res => {
-      console.log(res);
       const newSubteam: ChatChannel = {
         membersType: "team", name: subteamName,
       };
@@ -457,10 +456,10 @@ function flip(channel: ChatChannel, whereToFlip: ChatChannel): void {
 
   let bettingTable: string = buildBettingTable(calculatePotSize(channel), bettorRange);
 
-  bot2.chat.send(channel, {
+  bot2.chat.send(whereToFlip, {
     body: bettingTable,
   });
-  bot2.chat.send(channel, {
+  bot2.chat.send(whereToFlip, {
     body: `/flip ${minBet}..${maxBet}`,
   });
 }
@@ -823,9 +822,50 @@ function cancelFlip(conversationId: string, channel: ChatChannel, err: Error): v
   }
 }
 
-// TODO: Implement this.
 function getChannelFromSnipeId(snipeId: number): ChatChannel {
-  return;
+  Object.keys(activeSnipes).forEach((stringifiedChannel) => {
+    if(activeSnipes[stringifiedChannel].snipeId === snipeId) {
+      return JSON.parse(stringifiedChannel);
+    }
+  }
+}
+
+function flipInOurTeam(channel: ChatChannel) {
+
+  const snipe = activeSnipes[JSON.stringify(channel)];
+  const teamName = `codeforcash.croupier${snipe.snipeId}`;
+  const subChannel: object = {
+    membersType: "team", name: teamName, public: false, topicType: "chat",
+  };
+  bot.team.createSubteam(teamName).then(() => {
+    // invite all the participants - should probably throttle this.
+    let usernamesToInvite = Object.keys(snipe.positionSizes).map((username) => {
+      return {
+        "username": username,
+        "role": "reader"
+      }
+    });
+
+    bot.team.addMembers({
+      "team": teamName,
+      "usernames": usernamesToInvite
+    });
+
+    bot.chat.send(subChannel, {
+      body: '/flip'
+    });
+
+  });
+
+  return snipe;
+
+}
+
+
+function getOriginChannel(channelName): ChatChannel {
+  let channelMatch = channelName.match(/codeforcash.croupier(\d+)/);
+  let snipeId = channelMatch[1];
+  return getChannelFromSnipeId(snipeId);
 }
 
 const flipMonitorIntervals: object = {};
@@ -844,6 +884,7 @@ function monitorFlipResults(msg: MessageSummary): void {
 
 
   flipMonitorIntervals[msg.conversationId] = setInterval((() => {
+
     try {
       bot.chat.loadFlip(
         msg.conversationId,
@@ -864,15 +905,40 @@ function monitorFlipResults(msg: MessageSummary): void {
         }
       }).catch((err) => {
 
-        if(ourChannel) {
+        if(ourChannel)) {
           // extract the name of the offender
           // remove the offender from the team
           // clear the interval
           // run the flip again
+          bot.chat.getFlipData(msg.conversationId,
+            msg.content.flip.flipConvId,
+            msg.id,
+            msg.content.flip.gameId).then((res, stdout, stderr) => {
+            console.log('getflipdata res!');
+            console.log(res);
+            let errorInfo = JSON.parse(stdout).result.status.errorInfo;
+            if (errorInfo.dupreg && errorInfo.dupreg.user) {
+              bot.team.removeMember({
+                team: msg.channel.name,
+                username: errorInfo.dupreg.user
+              }).then(res => {
+                snipe.chatSend(`We have punted ${errorInfo.dupreg.user} for duplicate registration issues`);
+                flip(getOriginChannel(msg.channel.name), msg.channel)
+                clearInterval(flipMonitorIntervals[msg.conversationId]);
+              });
+            } else {
+              flip(getOriginChannel(msg.channel.name), msg.channel)
+              clearInterval(flipMonitorIntervals[msg.conversationId]);
+            }
+          });
         }
         else {
           snipe.chatSend('Due to error, we are going to re-cast the flip in a separate subteam over which we have governance and can kick anyone with a duplicate registration.');
-          flipInOurTeam(msg.channel)
+          let teamName = `codeforcash.croupier${snipe.snipeId}`;
+          let subChannel: object = {
+            membersType: "team", name: teamName, public: false, topicType: "chat",
+          };
+          flip(msg.channel, subChannel);
           clearInterval(flipMonitorIntervals[msg.conversationId]);
         }
       });

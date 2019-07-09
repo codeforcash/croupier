@@ -15,11 +15,11 @@ var fs = require('fs');
 var fs__default = _interopDefault(fs);
 var path = _interopDefault(require('path'));
 
-if(process.env.DEVELOPMENT == true) {
-  const croupierDirectory = '.';
+if(process.env.DEVELOPMENT == 'true') {
+  var croupierDirectory = '.';
 }
 else {
-  const croupierDirectory = '/home/keybase/croupier';
+  var croupierDirectory = '/home/keybase/croupier';
 }
 /**
   Takes a Keybase API input JavaScript object and recursively formats it into snake_case or kebab-case instead of camelCase for the service.

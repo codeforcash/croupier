@@ -51,24 +51,32 @@ function monitorFlip(msg) {
       try {
         console.log(msg);
         if (msg.content.type === "flip") {
-          monitorFlip(msg);
 
-          console.log(
-          {
-            conversationId: msg.conversationId,
-            flipConvId: msg.content.flip.flipConvId,
-            msgId: msg.id,
-            gameId: msg.content.flip.gameId,
-          }
-          );
 
-          bot.chat.getFlipData(msg.conversationId,
-            msg.content.flip.flipConversationId,
-            msg.id,
-            msg.content.flip.gameId).then((res) => {
-            console.log('getflipdata res!');
-            console.log(res);
-          });
+          setTimeout(() => {
+            monitorFlip(msg);
+
+            console.log(
+            {
+              conversationId: msg.conversationId,
+              flipConvId: msg.content.flip.flipConvId,
+              msgId: msg.id,
+              gameId: msg.content.flip.gameId,
+            }
+            );
+
+            bot.chat.getFlipData(msg.conversationId,
+              msg.content.flip.flipConvId,
+              msg.id,
+              msg.content.flip.gameId).then((res, stdout, stderr) => {
+              console.log('getflipdata res!');
+              console.log(res);
+              console.log('stdout', stdout);
+              console.log('stderr', stderr);
+            });
+
+
+           }, 1000 * 60);
 
 
 
