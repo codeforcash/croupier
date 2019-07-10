@@ -4,10 +4,16 @@ import * as _ from "lodash";
 import * as mysql from "mysql";
 import * as moment from "moment";
 import * as os from "os";
-import * as Bot from "./keybase-bot";
+import * as sourceMapSupport from "source-map-support";
 import * as throttledQueue from "throttled-queue";
+import * as Bot from "./keybase-bot";
 
-import "source-map-support/register";
+
+// import "source-map-support/register";
+
+sourceMapSupport.install({
+  environment: 'node',
+});
 
 const bot: Bot = new Bot(os.homedir());
 const bot2: Bot = new Bot(os.homedir());
@@ -18,60 +24,60 @@ const paperkey2: string = process.env.CROUPIER_PAPERKEY_2;
 
 let activeSnipes: object;
 
-const powerups = [
+const powerups: Array<IPowerup> = [
   {
-    name: 'nuke',
+    name: "nuke",
     description: `Go nuclear and play everyone's powerups in the order they were received`,
-    reaction: ':radioactive_sign:',
-    emoji: '☢️'
+    reaction: ":radioactive_sign:",
+    emoji: "☢️"
   },
   {
-    name: 'freeze',
-    description: 'For the next 10 seconds, powerups and bets are worthless and increase your position by 1',
-    reaction: ':shaved_ice:',
-    emoji: '🍧'
+    name: "freeze",
+    description: "For the next 10 seconds, powerups and bets are worthless and increase your position by 1",
+    reaction: ":shaved_ice:",
+    emoji: "🍧"
   },
   {
-    name: 'the-final-countdown',
+    name: "the-final-countdown",
     description: `o/\` It's the final countdown!  Reset the clock to 1 minute`,
-    reaction: ':man_dancing:',
-    emoji: '🕺'
+    reaction: ":man_dancing:",
+    emoji: "🕺"
   },
   {
-    name: 'level-the-playing-field',
+    name: "level-the-playing-field",
     description: `Level the playing field and reset everybody's positions to 1`,
-    reaction: ':rainbow-flag:',
-    emoji: '🏳️‍🌈'
+    reaction: ":rainbow-flag:",
+    emoji: "🏳️‍🌈"
   },
   {
-    name: 'popularity-contest',
-    description: 'Put it to a vote: who does the group like more, you or the pot leader?  If the pot leader wins, your position is reduced to 1.  If you win, you and the pot leader swap position sizes!',
-    reaction: ':dancers:',
-    emoji: '👯'
+    name: "popularity-contest",
+    description: "Put it to a vote: who does the group like more, you or the pot leader?  If the pot leader wins, your position is reduced to 1.  If you win, you and the pot leader swap position sizes!",
+    reaction: ":dancers:",
+    emoji: "👯"
   },
   {
-    name: 'half-life',
-    description: 'Cut the remaining time in half',
-    reaction: ':hourglass:',
-    emoji: '⌛'
+    name: "half-life",
+    description: "Cut the remaining time in half",
+    reaction: ":hourglass:",
+    emoji: "⌛"
   },
   {
-    name: 'double-life',
-    description: 'Double the remaining time',
-    reaction: ':hourglass_flowing_sand:',
-    emoji: '⏳'
+    name: "double-life",
+    description: "Double the remaining time",
+    reaction: ":hourglass_flowing_sand:",
+    emoji: "⏳"
   },
   {
-    name: 'assassin',
+    name: "assassin",
     description: `Reduce the pot leader's position size to 1`,
-    reaction: ':gun:',
-    emoji: '🔫'
+    reaction: ":gun:",
+    emoji: "🔫"
   },
   {
-    name: 'double-edged-sword',
-    description: 'Your position size has an even chance of doubling/halving',
-    reaction: ':dagger_knife:',
-    emoji: '🗡'
+    name: "double-edged-sword",
+    description: "Your position size has an even chance of doubling/halving",
+    reaction: ":dagger_knife:",
+    emoji: "🗡"
   }
 ];
 
@@ -135,11 +141,15 @@ interface ISnipe {
   blinds: number;
   betting_started: number;
   popularityContests: Array<IPopularityContest>;
+  potSizeStored: number;
+  clockRemaining: number;
 }
 
 interface IPositionSize {
   [key: string]: number;
 }
+
+
 
 function updateSnipeLog(channel: ChatChannel): void {
 
@@ -162,7 +172,9 @@ function updateSnipeLog(channel: ChatChannel): void {
     UPDATE snipes SET
     participants=${connection.escape(participants)},
     position_sizes=${connection.escape(positionSizes)},
-    blinds=${connection.escape(blinds)};
+    blinds=${connection.escape(blinds)},
+    pot_size=${connection.escape(calculatePotSize(channel))},
+    clock_remaining=${connection.escape(getTimeLeft(snipe))}
     WHERE
     id=${connection.escape(snipeId)}`, (error, results, fields) => {
     if (error) {
@@ -175,7 +187,7 @@ function updateSnipeLog(channel: ChatChannel): void {
 // If the same person made 3 bets in a row, issue a powerup
 // but not if they have recently been issued a powerup
 function shouldIssuePowerup(channel: ChatChannel) {
-  const snipe = activeSnipes[JSON.stringify(channel)];
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   let count = snipe.participants.length;
   if (count>=3
       && snipe.participants[count-1].username === snipe.participants[count-2].username
@@ -202,10 +214,8 @@ function shouldIssuePowerup(channel: ChatChannel) {
 }
 
 function issuePowerup(channel: ChatChannel, participantIndex: number) {
-  // let award = _.sample(powerups);
-  let award = powerups[0];
-
-  const snipe = activeSnipes[JSON.stringify(channel)];
+  let award = _.sample(powerups);
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   snipe.participants[participantIndex].powerup = {
     award: award,
     awardedAt: +new Date,
@@ -227,7 +237,7 @@ function issuePowerup(channel: ChatChannel, participantIndex: number) {
 
 function addSnipeParticipant(channel: ChatChannel, txn: Transaction, onBehalfOf?: string): void {
 
-  const snipe = activeSnipes[JSON.stringify(channel)];
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   let newParticipant;
 
   let betBeneficiary;
@@ -347,7 +357,7 @@ function calculateTransactionFees(txn: Transaction): Promise<number> {
       const xlmFeeMatch = details.feeChargedDescription.match(/(\d\.\d+) XLM/);
       if (xlmFeeMatch !== null) {
         const fee = parseFloat(xlmFeeMatch[1]);
-        console.log('fee', fee);
+        console.log("fee", fee);
         resolve(fee);
       }
     });
@@ -454,7 +464,7 @@ function resolveFlip(channel: ChatChannel, winningNumber: number): string {
 
 function buildBettorRange(channel: ChatChannel): any {
   const bettorMap: object = {};
-  const snipe = activeSnipes[JSON.stringify(channel)];
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   const bettorRange: object = {};
   let start: number = 0;
 
@@ -477,7 +487,7 @@ function displayFixedNice(a: number): string {
 
 function buildBettingTable(potSize: number, bettorRange: object): string {
 
-  console.log('within BuildBettingTable, bettorRange:', bettorRange);
+  console.log("within BuildBettingTable, bettorRange:", bettorRange);
 
   let maxValue = Math.max(..._.flatten(Object.values(bettorRange)));
 
@@ -506,7 +516,7 @@ function buildBettingTable(potSize: number, bettorRange: object): string {
 
 function makeSubteamForFlip(channel: ChatChannel) {
 
-  const snipe = activeSnipes[JSON.stringify(channel)];
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   const subteamName = `croupierflips.snipe${snipe.snipeId}`;
 
   let usernamesToAdd = [{"username": "croupier", "role": "admin"}];
@@ -533,7 +543,7 @@ function makeSubteamForFlip(channel: ChatChannel) {
 
 function flip(channel: ChatChannel, whereToFlip: ChatChannel): void {
 
-  if(typeof(whereToFlip) === 'undefined') {
+  if (typeof(whereToFlip) === "undefined") {
     whereToFlip = channel;
   }
 
@@ -543,10 +553,10 @@ function flip(channel: ChatChannel, whereToFlip: ChatChannel): void {
   const minBet: number = flatBettingValues.reduce((a, b) => Math.min(a, b));
   const maxBet: number = flatBettingValues.reduce((a, b) => Math.max(a, b));
 
-  let bettingTable: string = buildBettingTable(calculatePotSize(channel), bettorRange);
+  const bettingTable: string = buildBettingTable(calculatePotSize(channel), bettorRange);
 
   bot2.chat.send(whereToFlip, {
-    body: '**Final betting table...**'
+    body: "**Final betting table...**",
   });
   bot2.chat.send(whereToFlip, {
     body: bettingTable,
@@ -554,77 +564,72 @@ function flip(channel: ChatChannel, whereToFlip: ChatChannel): void {
   bot2.chat.send(whereToFlip, {
     body: `/flip ${minBet}..${maxBet}`,
   }).then((res) => {
-    const snipe = activeSnipes[JSON.stringify(channel)];
+    const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
     snipe.reflipping = false;
   });
 }
 
 function checkWalletBalance(username: string): Promise<any> {
-  let balance = 0;
-  return new Promise(resolve => {
+  let balance: number = 0;
+  return new Promise((resolve) => {
     bot.wallet.lookup(username).then((acct) => {
       console.log(acct);
       bot.wallet.balances(acct.accountId).then((balances) => {
         console.log(balances);
         balances.forEach((acctDetail) => {
-          console.log(acctDetail.balance[0].amount)
+          console.log(acctDetail.balance[0].amount);
           balance += parseFloat(acctDetail.balance[0].amount);
         });
         resolve(balance);
       }).catch((e) => {
         console.log(e);
         resolve(null);
-      })
-
+      });
     }).catch((e) => {
       console.log(e);
       resolve(null);
-    })
+    });
   });
 }
 
 function processNewBet(txn: Transaction, msg: MessageSummary): Promise<boolean> {
 
-  const channel = msg.channel;
-  const onBehalfOfMatch = msg.content.text.body.match(/(for|4):\s?@?(\w+)/i);
-  const snipe = activeSnipes[JSON.stringify(channel)];
+  const channel: ChatChannel = msg.channel;
+  const onBehalfOfMatch: Array<any> = msg.content.text.body.match(/(for|4):\s?@?(\w+)/i);
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
 
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
 
     if (onBehalfOfMatch !== null) {
-      const onBehalfOfRecipient = onBehalfOfMatch[2];
+      const onBehalfOfRecipient: string = onBehalfOfMatch[2];
 
       // check if the onBehalfOf user already has a wallet with bot.wallet.lookup(username);
       // if not, restrict the onBehalfOf wager to >= 2.01XLM, Keybase's minimum xfer for
       // new wallets
       checkWalletBalance(onBehalfOfRecipient).then((balance) => {
         if (balance === null || balance < 2.01) {
-          snipe.chatSend('Betting on behalf of someone else?  Seems like they do not have a wallet yet, so your bet must be at least 2.01XLM');
+          let sassyMessage: string = "Betting on behalf of someone else?  ";
+          sassyMessage += "Seems like they do not have a wallet yet, ";
+          sassyMessage += "so your bet must be at least 2.01XLM";
+          snipe.chatSend(sassyMessage);
           processRefund(txn, msg.channel);
           resolve(false);
-        }
-        else if (typeof(snipe.positionSizes[txn.fromUsername]) === 'undefined') {
-          snipe.chatSend('You cannot bet on behalf of someone else unless you are participating as well');
+        } else if (typeof(snipe.positionSizes[txn.fromUsername]) === "undefined") {
+          snipe.chatSend("You cannot bet on behalf of someone else unless you are participating as well");
           resolve(false);
-        }
-        else {
+        } else {
           addSnipeParticipant(channel, txn, onBehalfOfRecipient);
           snipe.chatSend(`@${onBehalfOfRecipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
-          bot.chat.react(channel, msg.id, ':gift:');
+          bot.chat.react(channel, msg.id, ":gift:");
           resolve(true);
         }
       });
-    }
-    else {
+    } else {
       addSnipeParticipant(channel, txn, undefined);
-      snipe.chatSend(`@${txn.fromUsername} is locked into the snipe!`);
+      bot.chat.react(channel, msg.id, ":heavy_check_mark:");
       resolve(true);
     }
-
   });
-
-
-
 }
 
 function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
@@ -640,11 +645,10 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
     return;
   }
 
-  let blinds;
-  if(typeof(snipe)==="undefined") {
+  let blinds: number;
+  if (typeof(snipe) === "undefined") {
     blinds = 0.01;
-  }
-  else {
+  } else {
     blinds = snipe.blinds;
   }
   if (parseFloat(txn.amount) < blinds) {
@@ -654,11 +658,10 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
     return;
   }
 
-
   if (typeof(snipe) === "undefined") {
 
     let countdown: number = 60;
-    const countdownMatch = msg.content.text.body.match(/countdown:\s?(\d+)/i);
+    const countdownMatch: Array<any> = msg.content.text.body.match(/countdown:\s?(\d+)/i);
     if (countdownMatch !== null) {
       countdown = parseInt(countdownMatch[1], 10);
       if (countdown < 5 || countdown > 60 * 60 * 24 * 7) {
@@ -669,40 +672,40 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
       }
     }
 
-
-    let chatThrottle = throttledQueue(5, 5000);
-    let moneyThrottle = throttledQueue(5, 5000);
+    const chatThrottle: any = throttledQueue(5, 5000);
+    const moneyThrottle: any = throttledQueue(5, 5000);
 
     activeSnipes[JSON.stringify(channel)] = {
       betting_open: true,
-      betting_started: +new Date,
-      clock: null,
-      participants: [],
-      timeout: null,
-      countdown: countdown,
-      reFlips: 3,
-      positionSizes: {},
+      betting_started: +new Date(),
+      betting_stops: moment().add(countdown, "seconds"),
       blinds: 0.01,
-      popularityContests: [],
       chatSend: (message) => {
-        return new Promise(resolve => {
-          chatThrottle(function() {
+        return new Promise((resolve) => {
+          chatThrottle(() => {
             bot.chat.send(channel, {
-              body: message
+              body: message,
             }).then((messageId) => {
               resolve(messageId);
             });
           });
         });
       },
+      clock: null,
+      countdown,
       moneySend: (amount, recipient) => {
-        return new Promise(resolve => {
-          moneyThrottle(function() {
+        return new Promise((resolve) => {
+          moneyThrottle(() => {
             bot.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient);
             resolve(true);
           });
         });
-      }
+      },
+      participants: [],
+      popularityContests: [],
+      positionSizes: {},
+      reFlips: 3,
+      timeout: null,
     };
 
     logNewSnipe(channel).then((snipeId) => {
@@ -711,71 +714,62 @@ function processTxnDetails(txn: Transaction, msg: MessageSummary): void {
       launchSnipe(channel);
       processNewBet(txn, msg);
     });
-
-  }
-  else {
-
+  } else {
     if (snipe.betting_open === false) {
-
       snipe.chatSend(`Betting has closed - refunding`);
-
       // Ensure the transaction is Completed before refunding
-      setTimeout(function() {
+      setTimeout(() => {
         processRefund(txn, channel);
       }, 1000 * 5);
       return;
     }
 
     processNewBet(txn, msg).then((betProcessed) => {
-      if(betProcessed) {
+      if (betProcessed) {
         resetSnipeClock(channel);
       }
     });
-
   }
-
-
 }
 
 function calculatePotSize(channel: ChatChannel): number {
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-  let sum = 0;
-  snipe.participants.forEach(participant => {
+  let sum: number;
+  if (snipe.potSizeStored) { // temp solution while we build a server solution robust enough to hold big data
+    sum = snipe.potSizeStored;
+  } else {
+    sum = 0;
+  }
+
+  snipe.participants.forEach((participant) => {
     sum += parseFloat(participant.transaction.amount);
   });
   return sum;
 }
 
-
 function getTimeLeft(snipe: ISnipe): number {
   return Math.ceil(Math.abs(moment.duration(snipe.betting_stops.diff(moment())).asSeconds()));
 }
 
-
 function resetSnipeClock(channel: ChatChannel): void {
-
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-
-  if(snipe.bettingTable) {
+  if (snipe.bettingTable) {
     bot.chat.delete(channel, snipe.bettingTable, {}).then(() => {
       snipe.chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(channel))).then((msg) => {
         snipe.bettingTable = msg.id;
       });
     });
-  }
-  else {
+  } else {
     snipe.chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(channel))).then((msg) => {
       snipe.bettingTable = msg.id;
     });
   }
-
-
-  let timeRemaining: number = Math.ceil(getTimeLeft(snipe));
-
-  console.log('time remaining', timeRemaining);
+  const timeRemaining: number = Math.ceil(getTimeLeft(snipe));
+  console.log("time remaining", timeRemaining);
   clearTimeout(snipe.timeout);
 
-  let boost, timerEndsInSeconds;
+  let boost: number;
+  let timerEndsInSeconds: number;
   if (timeRemaining <= 30) {
     timerEndsInSeconds = 60;
   } else {
@@ -783,12 +777,12 @@ function resetSnipeClock(channel: ChatChannel): void {
     timerEndsInSeconds = timeRemaining + boost;
   }
 
-  snipe.betting_stops = moment().add(timerEndsInSeconds, 'seconds');
+  snipe.betting_stops = moment().add(timerEndsInSeconds, "seconds");
 
   bot.chat.delete(channel, snipe.clock, {});
-  snipe.chatSend(`Betting stops ${moment().to(snipe.betting_stops)}`).then((sentMessage) => {
-    console.log('just sent the parent betting stops message in resetSnipeClock');
-    console.log('sentMessage', sentMessage);
+  snipe.chatSend(`+Betting stops ${moment().to(snipe.betting_stops)}`).then((sentMessage) => {
+    console.log("just sent the parent betting stops message in resetSnipeClock");
+    console.log("sentMessage", sentMessage);
     snipe.clock = sentMessage.id;
   });
   const finalizeBetsTimeout: NodeJS.Timeout = setTimeout(() => {
@@ -799,8 +793,8 @@ function resetSnipeClock(channel: ChatChannel): void {
 }
 
 function loadActiveSnipes(): object {
-  return new Promise(resolve => {
-    let snipes = {};
+  return new Promise((resolve) => {
+    const snipes: object = {};
 
     const connection: mysql.Connection = mysql.createConnection({
       database : process.env.MYSQL_DB,
@@ -817,70 +811,66 @@ function loadActiveSnipes(): object {
       }
 
       results.forEach((result) => {
-
-        let chatThrottle = throttledQueue(5, 5000);
-        let moneyThrottle = throttledQueue(5, 5000);
-
-        let channel = JSON.parse(result.channel);
-
+        const chatThrottle: any = throttledQueue(5, 5000);
+        const moneyThrottle: any = throttledQueue(5, 5000);
+        const channel: ChatChannel = JSON.parse(result.channel);
         snipes[JSON.stringify(channel)] = {
-          snipeId: result.id,
-          betting_started: result.betting_started,
           betting_open: true,
-          clock: null,
-          participants: JSON.parse(result.participants),
-          timeout: null,
-          countdown: result.countdown,
-          positionSizes: JSON.parse(result.position_sizes),
-          blinds: result.blinds,
-          popularityContests: [],
+          betting_started: parseInt(result.betting_started, 10),
+          blinds: parseFloat(result.blinds),
           chatSend: (message) => {
-            return new Promise(resolve => {
-              chatThrottle(function() {
+            return new Promise((resolveChatThrottle) => {
+              chatThrottle(() => {
                 bot.chat.send(channel, {
-                  body: message
+                  body: message,
                 }).then((messageId) => {
-                  resolve(messageId);
+                  resolveChatThrottle(messageId);
                 });
               });
             });
           },
+          clock: null,
+          clockRemaining: result.clock_remaining,
+          countdown: result.countdown,
           moneySend: (amount, recipient) => {
-            return new Promise(resolve => {
-              moneyThrottle(function() {
+            return new Promise((resolveMoneyThrottle) => {
+              moneyThrottle(() => {
                 bot.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient);
+                resolveMoneyThrottle();
               });
             });
-          }
+          },
+          participants: JSON.parse(result.participants),
+          popularityContests: [],
+          positionSizes: JSON.parse(result.position_sizes),
+          potSizeStored: parseInt(result.potSize, 10),
+          snipeId: result.id,
+          timeout: null,
         };
-
       });
-
       resolve(snipes);
-
     });
     connection.end();
   });
 }
 
-
-
 function launchSnipe(channel: ChatChannel): void {
   // Tell the channel: OK, your snipe has been accepted for routing.
-
-  let snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-
-
-  let message: string = `The snipe is on (**#${activeSnipes[JSON.stringify(channel)].snipeId}**).  Bet in multiples of 0.01XLM.  Betting format:`;
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
+  let message: string = `The snipe is on (**#${activeSnipes[JSON.stringify(channel)].snipeId}**).  `;
+  message += `Bet in multiples of 0.01XLM.  Betting format:`;
   message += `\`\`\`+0.01XLM@${botUsername}\`\`\``;
-  message += `Minimum bet: ${snipe.blinds}XLM`;
-
+  message += `Minimum bet: ${displayFixedNice(snipe.blinds)}XLM`;
 
   snipe.chatSend(message);
 
-  snipe.betting_stops = moment().add(snipe.countdown, 'seconds');
+  if (snipe.clockRemaining === null) {
+    snipe.betting_stops = moment().add(snipe.countdown, "seconds");
+  } else {
+    snipe.betting_stops = moment().add(snipe.clockRemaining, "seconds");
+  }
 
-  snipe.chatSend(`Betting stops ${moment().to(snipe.betting_stops)}`).then((sentMessage) => {
+  snipe.chatSend(`-Betting stops ${moment().to(snipe.betting_stops)}`).then((sentMessage) => {
     snipe.clock = sentMessage.id;
     runClock(channel);
   });
@@ -889,14 +879,11 @@ function launchSnipe(channel: ChatChannel): void {
     finalizeBets(channel);
   }, snipe.countdown * 1000);
   activeSnipes[JSON.stringify(channel)].timeout = finalizeBetsTimeout;
-
 }
 
 function finalizeBets(channel: ChatChannel): void {
-
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   snipe.chatSend("No more bets!");
-
   snipe.betting_open = false;
    // Give 5 seconds to finalize transactions + 1 extra.
   setTimeout(() => {
@@ -904,56 +891,53 @@ function finalizeBets(channel: ChatChannel): void {
   }, 6 * 1000);
 }
 
-
-
-
-
 function refundAllParticipants(channel: ChatChannel): void {
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   const bets: IBetList = {};
   snipe.participants.forEach((participant) => {
-    if(typeof(bets[participant.transaction.fromUsername]) === 'undefined') {
-
-      let b: IBetData = {
+    if (typeof(bets[participant.transaction.fromUsername]) === "undefined") {
+      const betData: IBetData = {
         fees: [],
         wagers: [],
       };
-      bets[participant.transaction.fromUsername] = b;
+      bets[participant.transaction.fromUsername] = betData;
 
     }
     bets[participant.transaction.fromUsername].fees.push(calculateTransactionFees(participant.transaction));
     bets[participant.transaction.fromUsername].wagers.push(participant.transaction.amount);
   });
 
-  const participantList = Object.keys(bets);
+  const participantList: Array<string> = Object.keys(bets);
 
   participantList.forEach((participant) => {
     Promise.all(bets[participant].fees).then((fees) => {
-      console.log('fees', fees);
-      let feeSum: number = fees.reduce((a, b) => parseFloat(a.toString()) + parseFloat(b.toString()));
-      console.log('feeSum', feeSum);
-      let wagerSum: number = bets[participant].wagers.reduce((a, b) => parseFloat(a.toString()) + parseFloat(b.toString()));
-      console.log('wagerSum', wagerSum);
-      let refund: number = _.round(wagerSum - feeSum, 7);
-      console.log('refund', refund);
+      console.log("fees", fees);
+      const feeSum: number = fees.reduce((a, b) => parseFloat(a.toString()) + parseFloat(b.toString()));
+      console.log("feeSum", feeSum);
+      const wagerSum: number = bets[participant].wagers.reduce((a, b) => {
+        return parseFloat(a.toString()) + parseFloat(b.toString());
+      });
+      console.log("wagerSum", wagerSum);
+      const refund: number = _.round(wagerSum - feeSum, 7);
+      console.log("refund", refund);
       snipe.moneySend(refund, participant);
     });
   });
 }
 
-
 function executeFlipOrCancel(channel: ChatChannel): void {
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   if (typeof(snipe) !== "undefined") {
-    const participantUsernames: Array<string> = snipe.participants.map((participant) => participant.onBehalfOf || participant.username);
+    const participantUsernames: Array<string> = snipe.participants.map((participant) => {
+        return participant.onBehalfOf || participant.username;
+    });
     const uniqParticipants: Array<string> = _.union(participantUsernames);
     if (uniqParticipants.length > 1) {
       flip(channel, channel);
-    }
-    else {
+    } else {
       refundAllParticipants(channel);
       snipe.chatSend("The snipe has been canceled due to a lack of participants.");
-      clearSnipe(channel, 'lack-of-participants');
+      clearSnipe(channel, "lack-of-participants");
     }
   }
 }
@@ -965,60 +949,54 @@ function cancelFlip(conversationId: string, channel: ChatChannel, err: Error): v
   if (typeof(activeSnipes[JSON.stringify(channel)]) !== "undefined") {
     snipe.chatSend(`The flip has been cancelled due to error, and everyone is getting a refund`);
     refundAllParticipants(channel);
-    clearSnipe(channel, 'flip-error');
+    clearSnipe(channel, "flip-error");
   }
 }
 
 function getChannelFromSnipeId(snipeId: number): ChatChannel {
   Object.keys(activeSnipes).forEach((stringifiedChannel) => {
-    if(activeSnipes[stringifiedChannel].snipeId === snipeId) {
+    if (activeSnipes[stringifiedChannel].snipeId === snipeId) {
       return JSON.parse(stringifiedChannel);
     }
   });
 }
 
-function flipInOurTeam(channel: ChatChannel) {
-
-  const snipe = activeSnipes[JSON.stringify(channel)];
-  const teamName = `croupierflips.snipe${snipe.snipeId}`;
+function flipInOurTeam(channel: ChatChannel): void {
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
+  const teamName: string = `croupierflips.snipe${snipe.snipeId}`;
   const subChannel: object = {
     membersType: "team", name: teamName, public: false, topicType: "chat",
   };
   bot.team.createSubteam(teamName).then((result) => {
 
-
-    console.log('result for creating subteam', result);
+    console.log("result for creating subteam", result);
     // invite all the participants - should probably throttle this.
-    let usernamesToInvite = Object.keys(snipe.positionSizes).map((username) => {
+    let usernamesToInvite: Array<object> = Object.keys(snipe.positionSizes).map((username) => {
       return {
-        "username": username,
-        "role": "reader"
-      }
+        role: "reader",
+        username,
+      };
     });
     usernamesToInvite = usernamesToInvite.concat({
-      "username": "croupier",
-      "role": "admin"
+      role: "admin",
+      username: "croupier",
     });
     bot.team.addMembers({
-      "team": teamName,
-      "usernames": usernamesToInvite
+      team: teamName,
+      usernames: usernamesToInvite,
     }).then((res) => {
-      console.log('result for adding members', res);
-        bot.chat.send(subChannel, {
-          body: '/flip'
-        });
+      console.log("result for adding members", res);
+      bot.chat.send(subChannel, {
+        body: "/flip",
+      });
     });
-
   });
-
   return snipe;
-
 }
 
-
-function getOriginChannel(channelName): ChatChannel {
-  let channelMatch = channelName.match(/croupierflips.snipe(\d+)/);
-  let snipeId = channelMatch[1];
+function getOriginChannel(channelName: string): ChatChannel {
+  const channelMatch: Array<any> = channelName.match(/croupierflips.snipe(\d+)/);
+  const snipeId: number = channelMatch[1];
   return getChannelFromSnipeId(snipeId);
 }
 
@@ -1026,17 +1004,16 @@ const flipMonitorIntervals: object = {};
 
 function monitorFlipResults(msg: MessageSummary): void {
 
-  let snipe, ourChannel;
-  let channelMatch = msg.channel.name.match(/croupierflips.snipe(\d+)/);
-  if(channelMatch === null) {
+  let snipe: ISnipe;
+  let ourChannel: boolean;
+  const channelMatch: Array<any> = msg.channel.name.match(/croupierflips.snipe(\d+)/);
+  if (channelMatch === null) {
     snipe = activeSnipes[JSON.stringify(msg.channel)];
     ourChannel = false;
-  }
-  else {
+  } else {
     snipe = activeSnipes[JSON.stringify(getChannelFromSnipeId(channelMatch[1]))];
     ourChannel = true;
   }
-
 
   flipMonitorIntervals[msg.conversationId] = setInterval((() => {
 
@@ -1049,24 +1026,23 @@ function monitorFlipResults(msg: MessageSummary): void {
       ).then((flipDetails) => {
         if (flipDetails.phase === 2) {
           console.log("results are in");
-          let winner = resolveFlip(msg.channel, flipDetails.resultInfo.number);
+          const winner: string = resolveFlip(msg.channel, flipDetails.resultInfo.number);
           clearInterval(flipMonitorIntervals[msg.conversationId]);
           clearSnipe(msg.channel, winner);
-          if(ourChannel) {
+          if (ourChannel) {
             // WISHLIST?: set Timeout to remove the team in ~15 minutes
           }
         } else {
           console.log("results are NOT in", flipDetails);
         }
       }).catch((err) => {
-
-        if(snipe.reflipping) {
+        if (snipe.reflipping) {
           return false;
         }
 
         snipe.reflipping = true;
 
-        if(ourChannel) {
+        if (ourChannel) {
           // extract the name of the offender
           // remove the offender from the team
           // clear the interval
@@ -1074,28 +1050,31 @@ function monitorFlipResults(msg: MessageSummary): void {
           bot.chat.getFlipData(msg.conversationId,
             msg.content.flip.flipConvId,
             msg.id,
-            msg.content.flip.gameId).then((res, stdout, stderr) => {
-            console.log('getflipdata res!');
-            console.log(res);
-            let errorInfo = JSON.parse(stdout).result.status.errorInfo;
+            msg.content.flip.gameId).then((getFlipDataRes, stdout, stderr) => {
+            console.log("getflipdata res!");
+            console.log(getFlipDataRes);
+            const errorInfo: object = JSON.parse(stdout).result.status.errorInfo;
             if (errorInfo.dupreg && errorInfo.dupreg.user) {
               bot.team.removeMember({
                 team: msg.channel.name,
-                username: errorInfo.dupreg.user
-              }).then(res => {
+                username: errorInfo.dupreg.user,
+              }).then((removeMemberRes) => {
                 snipe.chatSend(`We have punted ${errorInfo.dupreg.user} for duplicate registration issues`);
-                flip(getOriginChannel(msg.channel.name), msg.channel)
+                flip(getOriginChannel(msg.channel.name), msg.channel);
                 clearInterval(flipMonitorIntervals[msg.conversationId]);
               });
             } else {
-              flip(getOriginChannel(msg.channel.name), msg.channel)
+              flip(getOriginChannel(msg.channel.name), msg.channel);
               clearInterval(flipMonitorIntervals[msg.conversationId]);
             }
           });
         } else {
-          snipe.chatSend('Due to error, we are going to re-cast the flip in a separate subteam over which we have governance and can kick anyone with a duplicate registration.');
-          let teamName = `croupierflips.snipe${snipe.snipeId}`;
-          let subChannel: object = {
+          let flipErrorMessage: string = "Due to error, we are going to re-cast the flip in a ";
+          flipErrorMessage += "separate subteam over which we have governance and can kick anyone ";
+          flipErrorMessage += "with a duplicate registration.";
+          snipe.chatSend(flipErrorMessage);
+          const teamName: string = `croupierflips.snipe${snipe.snipeId}`;
+          const subChannel: object = {
             membersType: "team", name: teamName, public: false, topicType: "chat",
           };
           flip(msg.channel, subChannel);
@@ -1108,74 +1087,63 @@ function monitorFlipResults(msg: MessageSummary): void {
   }), 1000);
 }
 
-
-function adjustBlinds(channel: ChatChannel) {
-  let now = +new Date;
-  const snipe = activeSnipes[JSON.stringify(channel)];
-  let secondsElapsed = Math.floor((now - snipe.betting_started)/1000);
-  let minutesElapsed = Math.floor(secondsElapsed / 60.0);
-  let blinds;
-  if(minutesElapsed < 10) {
+function adjustBlinds(channel: ChatChannel): void {
+  const now: number = +new Date();
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
+  const secondsElapsed: number = Math.floor((now - snipe.betting_started) / 1000);
+  const minutesElapsed: number = Math.floor(secondsElapsed / 60.0);
+  let blinds: number;
+  if (minutesElapsed < 10) {
     blinds = 0.01;
   } else {
     blinds = 0.01 * Math.pow(2, Math.floor((minutesElapsed - 10) / 5));
+    // c.f. https://stackoverflow.com/questions/11832914/round-to-at-most-2-decimal-places-only-if-necessary
+    blinds = Math.round((blinds + 0.00001) * 100) / 100; // scale to 2 dp
   }
-  if(blinds !== snipe.blinds) {
+  if (blinds !== snipe.blinds) {
     snipe.blinds = blinds;
     updateSnipeLog(channel);
-    snipe.chatSend(`Blinds are raised to **${blinds}**`);
+    snipe.chatSend(`Blinds are raised to **${displayFixedNice(blinds)}XLM**`);
   }
-
 }
-
-
 
 const runningClocks: object = {};
 
 function runClock(channel: ChatChannel): void {
 
-  const snipe = activeSnipes[JSON.stringify(channel)];
-  const seconds = getTimeLeft(snipe);
-  console.log(`according to runClock, the timeLeft is ${seconds}`);
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
+  const seconds: number = getTimeLeft(snipe);
 
   try {
-
     adjustBlinds(channel);
-
     // :hourglass: :hourglass_flowing_sand:
-    if(seconds % 5 === 0) {
+    if (seconds % 5 === 0) {
 
-      let hourglass;
-      let lastDigit = JSON.stringify(seconds).slice(-1);
+      let hourglass: string;
+      const lastDigit: string = JSON.stringify(seconds).slice(-1);
       if (lastDigit === "5") {
         hourglass = ":hourglass:";
-      }
-      else {
+      } else {
         hourglass = ":hourglass_flowing_sand:";
       }
 
-      let stops_when = moment().to(snipe.betting_stops);
-      if(seconds < 55) {
-        stops_when = `in ${seconds} seconds`;
+      let stopsWhen: string = moment().to(snipe.betting_stops);
+      if (seconds < 55) {
+        stopsWhen = `in ${seconds} seconds`;
       }
-
-
       console.log(`attempting to edit message ${snipe.clock} in channel ${channel}`);
       bot.chat.edit(channel, snipe.clock, {
         message: {
-          body: hourglass + ` betting stops ${stops_when}`,
+          body: hourglass + ` betting stops ${stopsWhen}`,
         },
       }).then((res) => {
         console.log(res);
       }).catch((e) => {
         console.log(e);
       });
-
     }
-
   } catch (e) {
-
-    console.log('ran into error in runClock fxn, ', e);
+    console.log("ran into error in runClock fxn, ", e);
     return;
   }
 
@@ -1192,60 +1160,57 @@ function runClock(channel: ChatChannel): void {
 
 function buildPowerupsTable(channel: ChatChannel, whose: string): string {
 
-  let table = '';
-  const snipe = activeSnipes[JSON.stringify(channel)];
+  let table: string = "";
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
 
-  let powerupsCount = {};
+  const powerupsCount: object = {};
 
   snipe.participants.forEach((bet: IParticipant) => {
     if (bet.powerup && bet.powerup.usedAt === null && bet.username === whose) {
-      let award = JSON.stringify(bet.powerup.award);
-      if(typeof(powerupsCount[award]) === 'undefined') {
-        powerupsCount[award] = 0;
+      const awardJsonified: string = JSON.stringify(bet.powerup.award);
+      if (typeof(powerupsCount[awardJsonified]) === "undefined") {
+        powerupsCount[awardJsonified] = 0;
       }
-      powerupsCount[award] += 1;
+      powerupsCount[awardJsonified] += 1;
     }
   });
 
   Object.keys(powerupsCount).forEach((awardJsonified) => {
-    let award = JSON.parse(awardJsonified);
-    table += `${powerupsCount[awardJsonified]}x ${award.emoji} **${award.name}**: ${award.description}\n`;
+    const award: IPowerupAward = JSON.parse(awardJsonified);
+    table += `${powerupsCount[awardJsonified]}x ${award.reaction} **${award.name}**: ${award.description}\n`;
   });
   return table;
 }
 
-
-function checkTextForPowerup(msg: MessageSummary) {
-  const snipe = activeSnipes[JSON.stringify(msg.channel)];
-  if(typeof(snipe) === 'undefined') {
+function checkTextForPowerup(msg: MessageSummary): void {
+  const snipe: ISnipe = activeSnipes[JSON.stringify(msg.channel)];
+  if (typeof(snipe) === "undefined") {
     return;
   }
-
-  let powerupsQuery = msg.content.text.body.match(/(.powerups|🐶)\s?@?(\w+)?/);
-  if (powerupsQuery!==null) {
-    if (typeof(powerupsQuery[2]) !== 'undefined') {
-      let whose = powerupsQuery[1];
+  // would be better to have the regexp match object type
+  const powerupsQuery: Array<any> = msg.content.text.body.match(/(.powerups|🐶|:dog:)\s?@?(\w+)?/);
+  if (powerupsQuery !== null) {
+    if (typeof(powerupsQuery[2]) !== "undefined") {
+      const whose: string = powerupsQuery[1];
       if (snipe.positionSizes[whose] > 10) {
         snipe.positionSizes[whose] -= 10;
-        let str = buildPowerupsTable(msg.channel, whose);
-        snipe.sendChat(`${str}\nIt cost @${msg.sender.username} 10 position to scope @${whose} powerups`);
+        const powerupsTable: string = buildPowerupsTable(msg.channel, whose);
+        snipe.chatSend(`${powerupsTable}\nIt cost @${msg.sender.username} 10 position to scope @${whose} powerups`);
       }
-    }
-    else {
-      let whose = msg.sender.username;
+    } else {
+      const whose: string = msg.sender.username;
       if (snipe.positionSizes[whose] > 1) {
         snipe.positionSizes[whose] -= 1;
-        let str = buildPowerupsTable(msg.channel, whose);
-        snipe.sendChat(`${str}\nIt cost @${whose} 1 position to check their own powerups`);
+        const powerupsTable: string = buildPowerupsTable(msg.channel, whose);
+        snipe.chatSend(`${powerupsTable}\nIt cost @${whose} 1 position to check their own powerups`);
       }
     }
     return;
-  }
-  else {
+  } else {
     snipe.participants.forEach((bet: IParticipant) => {
       if (msg.sender.username === bet.username) {
-        if (bet.powerup && bet.powerup.usedAt===null) {
-          if (msg.content.text.body.toLowerCase().indexOf(bet.powerup.award.reaction) !==-1
+        if (bet.powerup && bet.powerup.usedAt === null) {
+          if (msg.content.text.body.toLowerCase().indexOf(bet.powerup.award.reaction) !== -1
                 || msg.content.text.body.indexOf(bet.powerup.award.emoji) !== -1) {
             consumePowerup(msg.channel, bet.powerup);
           }
@@ -1253,28 +1218,27 @@ function checkTextForPowerup(msg: MessageSummary) {
       }
     });
   }
-};
+}
 
-
-function checkReactionForPowerup(msg: MessageSummary) {
-  const snipe = activeSnipes[JSON.stringify(msg.channel)];
-  if(typeof(snipe) === 'undefined') {
+function checkReactionForPowerup(msg: MessageSummary): void {
+  const snipe: ISnipe = activeSnipes[JSON.stringify(msg.channel)];
+  if (typeof(snipe) === "undefined") {
     return;
   }
-  const reactionId = msg.id;
-  const reaction = msg.content.reaction;
+  const reactionId: string = msg.id;
+  const reaction: object = msg.content.reaction;
 
-  console.log('Checking for powerup');
-  console.log('msg.sender.username', msg.sender.username);
+  console.log("Checking for powerup");
+  console.log("msg.sender.username", msg.sender.username);
 
   snipe.participants.forEach((bet: IParticipant) => {
-    if(msg.sender.username === bet.username) {
-      if(bet.powerup && bet.powerup.usedAt===null) {
-        console.log('reaction.b', reaction.b);
-        console.log('bet powerup award reaction', bet.powerup.award.reaction);
-        console.log('reaction.m', reaction.m);
-        console.log('bet powerup reactionId', bet.powerup.reactionId);
-        if(reaction.b === bet.powerup.award.reaction && reaction.m === bet.powerup.reactionId)  {
+    if (msg.sender.username === bet.username) {
+      if (bet.powerup && bet.powerup.usedAt === null) {
+        console.log("reaction.b", reaction.b);
+        console.log("bet powerup award reaction", bet.powerup.award.reaction);
+        console.log("reaction.m", reaction.m);
+        console.log("bet powerup reactionId", bet.powerup.reactionId);
+        if (reaction.b === bet.powerup.award.reaction && reaction.m === bet.powerup.reactionId) {
           consumePowerup(msg.channel, bet.powerup);
         }
       }
@@ -1282,98 +1246,125 @@ function checkReactionForPowerup(msg: MessageSummary) {
   });
 }
 
-
-function findPotLead(channel: ChatChannel) {
-  const snipe = activeSnipes[JSON.stringify(channel)];
-  let obj = snipe.positionSizes;
-  return _.maxBy(_.keys(obj), function (o) { return obj[o]; });
+function findPotLead(channel: ChatChannel): string {
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
+  const positionSizes: Array<IPositionSize> = snipe.positionSizes;
+  return _.maxBy(_.keys(positionSizes), (username: string) => {
+    return positionSizes[username];
+  });
 }
 
+function consumePowerup(channel: ChatChannel, powerup: IPowerup): void {
 
-function consumePowerup(channel: ChatChannel, powerup: IPowerup) {
-  const snipe = activeSnipes[JSON.stringify(channel)];
-  let consumer: string = snipe.participants[powerup.participantIndex].username;
-  let leader = findPotLead(channel);
-  powerup.usedAt = +new Date;
-  switch(powerup.award.name) {
-    case 'nuke':
+  let sassyMessage: string;
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
+  const consumer: string = snipe.participants[powerup.participantIndex].username;
+  const leader: string = findPotLead(channel);
+  powerup.usedAt = +new Date();
+  let doNotResetClock: boolean = false;
+  switch (powerup.award.name) {
+    case "nuke":
+      const unusedPowerupsLength: number = snipe.participants.filter((p) => {
+        return p.powerup && typeof(p.powerup.usedAt) === "undefined";
+      }).length;
 
-      let unusedPowerups = snipe.participants.filter((p) => p.powerup && typeof(p.powerup.usedAt)==='undefined');
+      snipe.chatSend(`@${consumer} went nuclear.  Enjoy the show :fireworks:.`).then(() => {
+        if (unusedPowerupsLength === 0) {
+          snipe.chatSend(`...well, that was awkward. All that nuclear FUD, and for what?`);
+        }
+      });
 
-      snipe.sendChat(`@${consumer} went nuclear.  Enjoy the show :fireworks:.`);
-      if(unusedPowerups.length === 0) {
-        snipe.sendChat(`...well, that was awkward. All that nuclear FUD, and for what?`);
-      }
       snipe.participants.forEach((participant) => {
-        if(participant.powerup) {
-          let powerup = participant.powerup;
-          if(typeof(powerup.usedAt)==='undefined') {
-            consumePowerup(getChannelFromSnipeId(snipe.snipeId), powerup);
+        if (participant.powerup) {
+          if (participant.powerup.usedAt === null) {
+            consumePowerup(getChannelFromSnipeId(snipe.snipeId), participant.powerup);
           }
         }
       });
       break;
-    case 'freeze':
-      snipe.sendChat(`@${consumer} played Freeze.  Any action by anyone other than ${consumer} or @croupier during the next 10 seconds will be ignored and instead increase ${consumer}'s position by 1.`);
+    case "freeze":
+
+      sassyMessage = `@${consumer} played Freeze.  `;
+      sassyMessage += `Any action by anyone other than ${consumer} or @croupier during `;
+      sassyMessage += `the next 10 seconds will be ignored and instead increase ${consumer}'s `;
+      sassyMessage += `position by 1.`;
+      snipe.chatSend(sassyMessage);
       snipe.freeze = consumer;
       setTimeout(() => {
-        snipe.sendChat(`@${consumer}'s freeze has expired!`);
+        snipe.chatSend(`@${consumer}'s freeze has expired!`);
         snipe.freeze = undefined;
       }, 1000 * 10);
       break;
-    case 'the-final-countdown':
-      snipe.betting_stops = moment().add(60, 'seconds');
-      snipe.sendChat(`@${consumer} played The Final Countdown.  Will things ever be the same again?  60 seconds on the clock.   It's the final countdown.`);
+    case "the-final-countdown":
+      snipe.betting_stops = moment().add(60, "seconds");
+      sassyMessage = `@${consumer} played The Final Countdown.  `;
+      sassyMessage += `Will things ever be the same again?  60 seconds on the clock.  `;
+      sassyMessage += `It's the final countdown.`;
+      snipe.chatSend(sassyMessage);
+      doNotResetClock = true;
       break;
-    case 'level-the-playing-field':
+    case "level-the-playing-field":
       Object.keys(snipe.positionSizes).forEach((username) => {
         snipe.positionSizes[username] = 1;
       });
-      snipe.sendChat(`@${consumer} leveled the playing field in a big way.  Everyone's positions are now equal.  One love.`);
+      sassyMessage = `@${consumer} leveled the playing field in a big way.`;
+      sassyMessage += `  Everyone's positions are now equal.  One love.`;
+      snipe.chatSend(sassyMessage);
       break;
-    case 'half-life':  // Cut the remaining time in half
-      let timeToSubtract: number = Math.floor(getTimeLeft(snipe) / 2.0);
-      snipe.betting_stops = snipe.betting_stops.subtract(timeToSubtract, 'seconds');
-      snipe.sendChat(`@${consumer} chopped ${timeToSubtract} seconds off the clock.`);
+    case "half-life":  // Cut the remaining time in half
+      const timeToSubtract: number = Math.floor(getTimeLeft(snipe) / 2.0);
+      snipe.betting_stops = snipe.betting_stops.subtract(timeToSubtract, "seconds");
+      snipe.chatSend(`@${consumer} chopped ${timeToSubtract} seconds off the clock.`);
+      doNotResetClock = true;
       break;
-    case 'double-life': // Double the remaining time
-      let timeToAdd: number = Math.floor(getTimeLeft(snipe));
-      snipe.betting_stops = snipe.betting_stops.add(timeToAdd, 'seconds');
-      snipe.sendChat(`@${consumer} added ${timeToAdd} seconds to the clock.`);
+    case "double-life": // Double the remaining time
+      const timeToAdd: number = Math.floor(getTimeLeft(snipe));
+      snipe.betting_stops = snipe.betting_stops.add(timeToAdd, "seconds");
+      snipe.chatSend(`@${consumer} added ${timeToAdd} seconds to the clock.`);
+      doNotResetClock = true;
       break;
-    case 'assassin': // Reduce the pot leader's position size to 1
+    case "assassin": // Reduce the pot leader's position size to 1
       snipe.positionSizes[leader] = 1;
-      snipe.chatSend(`@${consumer}'s :gun: seriously injured @${leader} and their position size is now 1.`)
+      sassyMessage = `@${consumer}'s :gun: seriously injured @${leader} and their position size is now 1.`;
+      snipe.chatSend(sassyMessage);
       break;
-    case 'popularity-contest': // Put it to a vote: who does the group like more, you or the pot leader?  If the pot leader wins, your position is reduced to 1.  If you win, you and the pot leader swap position sizes!
-      if(consumer === leader) {
+    case "popularity-contest":
+      if (consumer === leader) {
         snipe.chatSend(`You cannot challenge yourself in this game. ::powerup fizzles::`);
         return;
       }
+
+      sassyMessage = `@${consumer} called a popularity contest to challenge @${leader}'s throne!`;
+      sassyMessage +=  `  Whom do you prefer?  `;
+      sassyMessage += `First to 3 votes wins `;
+      sassyMessage += `(4 votes including the initial reaction seeded by me the Croupier)!`;
       bot.chat.send(channel, {
-        body: `@${consumer} called a popularity contest to challenge @${leader}'s throne!  Whom do you prefer?  First to 3 votes wins (4 votes including the initial reaction seeded by me the Croupier)!`
+        body: sassyMessage,
       }).then((msgData) => {
-        let challengerReaction = bot.chat.react(channel, msgData.id, `${consumer}`);
-        let leaderReaction = bot.chat.react(channel, msgData.id, `${leader}`);
+        const challengerReaction: Promise<SendResult> = bot.chat.react(channel, msgData.id, `${consumer}`);
+        const leaderReaction: Promise<SendResult> = bot.chat.react(channel, msgData.id, `${leader}`);
         Promise.all([challengerReaction, leaderReaction]).then((values) => {
           snipe.popularityContests.push({
             challenger: consumer,
-            leader: leader,
+            leader,
             pollMessageId: msgData.id,
             votesForChallenger: [],
-            votesForLeader: []
+            votesForLeader: [],
           });
         });
       });
       break;
-    case 'double-edged-sword': // Even chance of halving or doubling one's position size
-      if(Math.random() >= 0.5) {
+    case "double-edged-sword": // Even chance of halving or doubling one's position size
+      if (Math.random() >= 0.5) {
         snipe.positionSizes[consumer] = 2 * snipe.positionSizes[consumer];
-        snipe.chatSend(`A favorable day!  @${consumer}'s position size has doubled to ${snipe.positionSizes[consumer]}`);
-      }
-      else {
+        sassyMessage = `A favorable day!  @${consumer}'s position size has doubled`;
+        sassyMessage += ` to ${snipe.positionSizes[consumer]}`;
+        snipe.chatSend(sassyMessage);
+      } else {
         snipe.positionSizes[consumer] = Math.ceil(snipe.positionSizes[consumer] / 2);
-        snipe.chatSend(`Ouch! @${consumer} cut their hand on the double edged sword and is now dealing with ${snipe.positionSizes[consumer]}.`);
+        sassyMessage = `Ouch! @${consumer} cut their hand on the double edged sword`;
+        sassyMessage += ` and is now dealing with ${snipe.positionSizes[consumer]}.`;
+        snipe.chatSend(sassyMessage);
       }
       break;
     default:
@@ -1381,23 +1372,24 @@ function consumePowerup(channel: ChatChannel, powerup: IPowerup) {
       break;
   }
   updateSnipeLog(channel);
-  resetSnipeClock(channel);
+  if (!doNotResetClock) {
+    resetSnipeClock(channel);
+  }
 }
 
-function checkForPopularityContestVote(msg: MessageSummary) {
-  const snipe = activeSnipes[JSON.stringify(msg.channel)];
-  if(typeof(snipe) === 'undefined' || typeof(snipe.popularityContests) === 'undefined')  {
+function checkForPopularityContestVote(msg: MessageSummary): void {
+  const snipe: ISnipe = activeSnipes[JSON.stringify(msg.channel)];
+  if (typeof(snipe) === "undefined" || typeof(snipe.popularityContests) === "undefined")  {
     return;
   }
-  const reactionId = msg.id;
-  const reaction = msg.content.reaction;
+  const reactionId: string = msg.id;
+  const reaction: object = msg.content.reaction;
   snipe.popularityContests.forEach((contest) => {
-    if(contest.pollMessageId === reaction.m) {
-      if(reaction.b === contest.leader) {
+    if (contest.pollMessageId === reaction.m) {
+      if (reaction.b === contest.leader) {
         contest.votesForLeader.push(reactionId);
         checkForPopularityContestEnd(msg.channel, reaction.m);
-      }
-      else if(reaction.b === contest.challenger) {
+      } else if (reaction.b === contest.challenger) {
         contest.votesForChallenger.push(reactionId);
         checkForPopularityContestEnd(msg.channel, reaction.m);
       }
@@ -1405,45 +1397,47 @@ function checkForPopularityContestVote(msg: MessageSummary) {
   });
 }
 
-function checkForPopularityContestVoteRemoval(msg: MessageSummary) {
-  let getIdx;
-  let deleteReactionIds = msg.content.delete.messageIDs;
+function checkForPopularityContestVoteRemoval(msg: MessageSummary): void {
+  let getIdx: number;
+  const deleteReactionIds: Array<string> = msg.content.delete.messageIDs;
   // check for open popularity contests.
-  const snipe = activeSnipes[JSON.stringify(msg.channel)];
+  const snipe: ISnipe = activeSnipes[JSON.stringify(msg.channel)];
+  if (typeof(snipe) === "undefined") {
+    return;
+  }
   snipe.popularityContests.forEach((contest, contestIdx) => {
-    deleteReactionIds.forEach(reactionToDeleteId => {
+    deleteReactionIds.forEach((reactionToDeleteId) => {
       getIdx = contest.votesForLeader.indexOf(reactionToDeleteId);
-      if(getIdx !== -1) {
+      if (getIdx !== -1) {
         contest.votesForLeader.splice(getIdx, 1);
       }
       getIdx = contest.votesForChallenger.indexOf(reactionToDeleteId);
-      if(getIdx !== -1) {
+      if (getIdx !== -1) {
         contest.votesForChallenger.splice(getIdx, 1);
       }
     });
-
   });
+}
 
-};
-
-function checkForPopularityContestEnd(channel: ChatChannel, pollMessageId: string) {
-  const snipe = activeSnipes[JSON.stringify(channel)];
+function checkForPopularityContestEnd(channel: ChatChannel, pollMessageId: string): void {
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   snipe.popularityContests.forEach((contest, contestIdx) => {
 
     if (contest.votesForChallenger.length >= 3) {
-      let leaderPositionSize = snipe.positionSizes[contest.leader];
-      let challengerPositionSize = snipe.positionSizes[contest.challenger];
+      const leaderPositionSize: number = snipe.positionSizes[contest.leader];
+      const challengerPositionSize: number = snipe.positionSizes[contest.challenger];
       snipe.positionSizes[contest.leader] = challengerPositionSize;
       snipe.positionSizes[contest.challenger] = leaderPositionSize;
-      snipe.sendChat(`${contest.challenger} and ${contest.leader} have swapped position sizes! You can't buy your way to the top in this game!`)
+      const sassySwapMsg: string = `${contest.challenger} and ${contest.leader} have swapped position sizes!`;
+      sassySwapMsg += `You can't buy your way to the top in this game!`;
+      snipe.chatSend(sassySwapMsg);
 
       // TODO: could be dangerous to modify an array while looping over it?
       // mark the contest closed ...
       snipe.popularityContests.splice(contestIdx, 1);
-    }
-    else if(contest.votesForLeader.length >= 3) {
+    } else if (contest.votesForLeader.length >= 3) {
       snipe.positionSizes[contest.challenger] = 1;
-      snipe.sendChat(`${contest.challenger} lost the popular vote and is punished.  Position size = 1.`)
+      snipe.chatSend(`${contest.challenger} lost the popular vote and is punished.  Position size = 1.`);
       // mark the contest closed
       snipe.popularityContests.splice(contestIdx, 1);
     }
@@ -1452,8 +1446,8 @@ function checkForPopularityContestEnd(channel: ChatChannel, pollMessageId: strin
 }
 
 function freeze(msg: MessageSummary): void {
-  const snipe = activeSnipes[JSON.stringify(msg.channel)];
-  snipe.sendChat(`@${msg.sender.username}'s attempt was frozen and instead @${snipe.freeze}'s position increased +1`);
+  const snipe: ISnipe = activeSnipes[JSON.stringify(msg.channel)];
+  snipe.chatSend(`@${msg.sender.username}'s attempt was frozen and instead @${snipe.freeze}'s position increased +1`);
   snipe.positionSizes[snipe.freeze] += 1;
 }
 
@@ -1465,44 +1459,38 @@ async function main(): Promise<any> {
     console.log("Second key initialized");
     console.log("Listening for all messages...");
 
-    const channel: object = {
+    const mkbotChannel: object = {
        membersType: "team", name: "mkbot", public: false, topicName: "test3", topicType: "chat",
     };
     const message: object = {
       body: `${botUsername} was just restarted...[development mode] [use at own risk] [not functional]`,
     };
 
-    bot.chat.send(channel, message);
+    bot.chat.send(mkbotChannel, message);
 
     activeSnipes = await loadActiveSnipes();
 
-
-    console.log('here, the active snipes we found: ');
+    console.log("here, the active snipes we found: ");
     console.log(activeSnipes);
 
     Object.keys(activeSnipes).forEach((chid) => {
 
-      let channel = JSON.parse(chid);
-      activeSnipes[chid].chatSend('Croupier was restarted... Previous bets are still valid!');
-      activeSnipes[chid].chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(channel)));
-      launchSnipe(channel);
-
+      const snipeChannel: ChatChannel = JSON.parse(chid);
+      activeSnipes[chid].chatSend("Croupier was restarted... Previous bets are still valid!");
+      activeSnipes[chid].chatSend(buildBettingTable(calculatePotSize(snipeChannel), buildBettorRange(snipeChannel)));
+      launchSnipe(snipeChannel);
     });
-
-
-
 
     await bot.chat.watchAllChannelsForNewMessages(
       async (msg) => {
-
-        if(msg.channel.topicName !== "test3") {
+        if (msg.channel.topicName !== "test3") {
           return;
         }
-
         try {
-
-          let snipe = activeSnipes[JSON.stringify(msg.channel)];
-          if (typeof(snipe)!=='undefined' && snipe.freeze && msg.sender.username !== snipe.freeze) {
+          const snipe: ISnipe = activeSnipes[JSON.stringify(msg.channel)];
+          if (typeof(snipe) !== "undefined" &&
+            snipe.freeze &&
+            msg.sender.username !== snipe.freeze) {
             freeze(msg);
             return;
           }

@@ -42,7 +42,11 @@ var moment = require("moment");
 var os = require("os");
 var Bot = require("./keybase-bot");
 var throttledQueue = require("throttled-queue");
-require("source-map-support/register");
+var sourceMapSupport = require("source-map-support");
+// import "source-map-support/register";
+sourceMapSupport.install({
+    environment: 'node'
+});
 var bot = new Bot(os.homedir());
 var bot2 = new Bot(os.homedir());
 var botUsername = "croupier";
@@ -867,6 +871,7 @@ function adjustBlinds(channel) {
     }
     else {
         blinds = 0.01 * Math.pow(2, Math.floor((minutesElapsed - 10) / 5));
+        blinds = Math.round((blinds + 0.00001) * 100) / 100; // scale to 2 dp  per https://stackoverflow.com/questions/11832914/round-to-at-most-2-decimal-places-only-if-necessary
     }
     if (blinds !== snipe.blinds) {
         snipe.blinds = blinds;
