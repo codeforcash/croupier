@@ -1,18 +1,17 @@
 // tsc --lib es2015 index.ts
 
 import * as _ from "lodash";
-import * as mysql from "mysql";
 import * as moment from "moment";
+import * as mysql from "mysql";
 import * as os from "os";
 import * as sourceMapSupport from "source-map-support";
 import * as throttledQueue from "throttled-queue";
 import * as Bot from "./keybase-bot";
 
-
 // import "source-map-support/register";
 
 sourceMapSupport.install({
-  environment: 'node',
+  environment: "node",
 });
 
 const bot: Bot = new Bot(os.homedir());
@@ -24,61 +23,66 @@ const paperkey2: string = process.env.CROUPIER_PAPERKEY_2;
 
 let activeSnipes: object;
 
+let sassyPopularityContestDescription: string = "Put it to a vote: who does the group like more, ";
+sassyPopularityContestDescription += "you or the pot leader?  If the pot leader wins, your ";
+sassyPopularityContestDescription += "position is reduced to 1.  If you win, you and the pot ";
+sassyPopularityContestDescription += "leader swap position sizes!";
+
 const powerups: Array<IPowerup> = [
   {
-    name: "nuke",
     description: `Go nuclear and play everyone's powerups in the order they were received`,
+    emoji: "☢️",
+    name: "nuke",
     reaction: ":radioactive_sign:",
-    emoji: "☢️"
   },
   {
-    name: "freeze",
     description: "For the next 10 seconds, powerups and bets are worthless and increase your position by 1",
+    emoji: "🍧",
+    name: "freeze",
     reaction: ":shaved_ice:",
-    emoji: "🍧"
   },
   {
-    name: "the-final-countdown",
     description: `o/\` It's the final countdown!  Reset the clock to 1 minute`,
+    emoji: "🕺",
+    name: "the-final-countdown",
     reaction: ":man_dancing:",
-    emoji: "🕺"
   },
   {
-    name: "level-the-playing-field",
     description: `Level the playing field and reset everybody's positions to 1`,
+    emoji: "🏳️‍🌈",
+    name: "level-the-playing-field",
     reaction: ":rainbow-flag:",
-    emoji: "🏳️‍🌈"
   },
   {
+    description: sassyPopularityContestDescription,
+    emoji: "👯",
     name: "popularity-contest",
-    description: "Put it to a vote: who does the group like more, you or the pot leader?  If the pot leader wins, your position is reduced to 1.  If you win, you and the pot leader swap position sizes!",
     reaction: ":dancers:",
-    emoji: "👯"
   },
   {
-    name: "half-life",
     description: "Cut the remaining time in half",
+    emoji: "⌛",
+    name: "half-life",
     reaction: ":hourglass:",
-    emoji: "⌛"
   },
   {
-    name: "double-life",
     description: "Double the remaining time",
+    emoji: "⏳",
+    name: "double-life",
     reaction: ":hourglass_flowing_sand:",
-    emoji: "⏳"
   },
   {
-    name: "assassin",
     description: `Reduce the pot leader's position size to 1`,
+    emoji: "🔫",
+    name: "assassin",
     reaction: ":gun:",
-    emoji: "🔫"
   },
   {
-    name: "double-edged-sword",
     description: "Your position size has an even chance of doubling/halving",
+    emoji: "🗡",
+    name: "double-edged-sword",
     reaction: ":dagger_knife:",
-    emoji: "🗡"
-  }
+  },
 ];
 
 import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
@@ -118,11 +122,11 @@ type ThrottledChat = (message: string) => Promise<any>;
 type ThrottledMoneyTransfer = (xlmAmount: number, recipient: string) => Promise<any>;
 
 interface IPopularityContest {
-  challenger: string,
-  leader: string,
-  pollMessageId: string,
-  votesForChallenger: Array<string>,
-  votesForLeader: Array<string>
+  challenger: string;
+  leader: string;
+  pollMessageId: string;
+  votesForChallenger: Array<string>;
+  votesForLeader: Array<string>;
 }
 
 interface ISnipe {
@@ -149,15 +153,13 @@ interface IPositionSize {
   [key: string]: number;
 }
 
-
-
 function updateSnipeLog(channel: ChatChannel): void {
 
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   const participants: string = JSON.stringify(snipe.participants);
   const positionSizes: string = JSON.stringify(snipe.positionSizes);
   const blinds: number = snipe.blinds;
-  let snipeId = activeSnipes[JSON.stringify(channel)].snipeId;
+  const snipeId: number = activeSnipes[JSON.stringify(channel)].snipeId;
 
   const connection: mysql.Connection = mysql.createConnection({
     database : process.env.MYSQL_DB,
@@ -186,46 +188,42 @@ function updateSnipeLog(channel: ChatChannel): void {
 
 // If the same person made 3 bets in a row, issue a powerup
 // but not if they have recently been issued a powerup
-function shouldIssuePowerup(channel: ChatChannel) {
+function shouldIssuePowerup(channel: ChatChannel): void {
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-  let count = snipe.participants.length;
-  if (count>=3
-      && snipe.participants[count-1].username === snipe.participants[count-2].username
-      && snipe.participants[count-2].username === snipe.participants[count-3].username
+  const count: number = snipe.participants.length;
+  if (count >= 3
+      && snipe.participants[count - 1].username === snipe.participants[count - 2].username
+      && snipe.participants[count - 2].username === snipe.participants[count - 3].username
     ) {
 
-
-    let lastPowerupIndex = 0;
+    let lastPowerupIndex: number = 0;
     snipe.participants.forEach((participant, idx) => {
-      if(participant.powerup) {
+      if (participant.powerup) {
         lastPowerupIndex = idx;
       }
     });
-    if(((count-1) - lastPowerupIndex) >= 3) {
+    if (((count - 1) - lastPowerupIndex) >= 3) {
       return true;
-    }
-    else {
+    } else {
       return false;
     }
-  }
-  else {
+  } else {
     return false;
   }
 }
 
-function issuePowerup(channel: ChatChannel, participantIndex: number) {
-  let award = _.sample(powerups);
+function issuePowerup(channel: ChatChannel, participantIndex: number): void {
+  const award: IPowerupAward = _.sample(powerups);
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   snipe.participants[participantIndex].powerup = {
-    award: award,
-    awardedAt: +new Date,
+    award,
+    awardedAt: +new Date(),
+    participantIndex,
+    reactionId: null,
     usedAt: null,
-    participantIndex: participantIndex,
-    reactionId: null
   };
 
-
-  let awardee = snipe.participants[participantIndex].username;
+  const awardee: string = snipe.participants[participantIndex].username;
   snipe.chatSend(`Congrats @${awardee}, you won the **${award.name}** powerup.
     *${award.description}*
     Click the emoji to consume the powerup.`).then((msg) => {
@@ -238,35 +236,32 @@ function issuePowerup(channel: ChatChannel, participantIndex: number) {
 function addSnipeParticipant(channel: ChatChannel, txn: Transaction, onBehalfOf?: string): void {
 
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-  let newParticipant;
+  let newParticipant: object;
+  let betBeneficiary: string;
 
-  let betBeneficiary;
-
-  if(typeof(onBehalfOf) === 'undefined') {
+  if (typeof(onBehalfOf) === "undefined") {
     newParticipant = {
       transaction: txn,
       username: txn.fromUsername,
     };
     betBeneficiary = txn.fromUsername;
-  }
-  else {
+  } else {
     newParticipant = {
+      onBehalfOf,
       transaction: txn,
       username: txn.fromUsername,
-      onBehalfOf: onBehalfOf
     };
     betBeneficiary = onBehalfOf;
   }
 
   snipe.participants.push(newParticipant);
-  if(typeof(snipe.positionSizes[betBeneficiary]) === 'undefined') {
+  if (typeof(snipe.positionSizes[betBeneficiary]) === "undefined") {
     snipe.positionSizes[betBeneficiary] = Math.floor(txn.amount / 0.01);
   } else {
     snipe.positionSizes[betBeneficiary] += Math.floor(txn.amount / 0.01);
   }
 
-
-  if(shouldIssuePowerup(channel)) {
+  if (shouldIssuePowerup(channel)) {
     issuePowerup(channel, snipe.participants.length - 1);
   }
 
@@ -277,7 +272,7 @@ function logNewSnipe(channel: ChatChannel): Promise<any> {
 
   return new Promise((resolve) => {
 
-    let snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
+    const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
     const connection: mysql.Connection = mysql.createConnection({
       database : process.env.MYSQL_DB,
       host     : process.env.MYSQL_HOST,
@@ -307,12 +302,12 @@ function logNewSnipe(channel: ChatChannel): Promise<any> {
 
 }
 
-
-
 function documentSnipe(channel: ChatChannel, reason: string): void {
 
-  let snipeId = activeSnipes[JSON.stringify(channel)].snipeId;
-  let was_cancelled, winner, cancellation_reason;
+  const snipeId: number = activeSnipes[JSON.stringify(channel)].snipeId;
+  let wasCancelled: number;
+  let winner: string;
+  let cancellationReason: string;
 
   const connection: mysql.Connection = mysql.createConnection({
     database : process.env.MYSQL_DB,
@@ -323,22 +318,21 @@ function documentSnipe(channel: ChatChannel, reason: string): void {
 
   connection.connect();
 
-  if (reason === 'lack-of-participants' || reason === 'flip-error') {
-    was_cancelled = 1;
+  if (reason === "lack-of-participants" || reason === "flip-error") {
+    wasCancelled = 1;
     winner = null;
-    cancellation_reason = reason;
-  }
-  else {
-    was_cancelled = 0;
+    cancellationReason = reason;
+  } else {
+    wasCancelled = 0;
     winner = reason;
-    cancellation_reason = null;
+    cancellationReason = null;
   }
 
   connection.query(`UPDATE snipes
     SET
       winner=${connection.escape(winner)},
-      was_cancelled=${connection.escape(was_cancelled)},
-      cancellation_reason=${connection.escape(cancellation_reason)},
+      was_cancelled=${connection.escape(wasCancelled)},
+      cancellation_reason=${connection.escape(cancellationReason)},
       in_progress=0
     WHERE
       id=${connection.escape(snipeId)}
@@ -352,11 +346,11 @@ function documentSnipe(channel: ChatChannel, reason: string): void {
 }
 
 function calculateTransactionFees(txn: Transaction): Promise<number> {
-  return new Promise(resolve => {
-    bot.wallet.details(txn.txId).then(details => {
-      const xlmFeeMatch = details.feeChargedDescription.match(/(\d\.\d+) XLM/);
+  return new Promise((resolve) => {
+    bot.wallet.details(txn.txId).then((details) => {
+      const xlmFeeMatch: Array<any> = details.feeChargedDescription.match(/(\d\.\d+) XLM/);
       if (xlmFeeMatch !== null) {
-        const fee = parseFloat(xlmFeeMatch[1]);
+        const fee: number = parseFloat(xlmFeeMatch[1]);
         console.log("fee", fee);
         resolve(fee);
       }
@@ -364,21 +358,18 @@ function calculateTransactionFees(txn: Transaction): Promise<number> {
   });
 }
 
-
-
 function processRefund(txn: Transaction, channel: ChatChannel): void {
 
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
 
   console.log("refunding txn", txn);
-  calculateTransactionFees(txn).then(transactionFees => {
+  calculateTransactionFees(txn).then((transactionFees) => {
     console.log("not refunding txn fees", transactionFees);
     const refund: number = _.round(txn.amount - transactionFees, 7);
     console.log("total refund is", refund);
     snipe.moneySend(refund, txn.fromUsername);
   });
 }
-
 
 function clearSnipe(channel: ChatChannel, reason: string): void {
   documentSnipe(channel, reason);
@@ -396,7 +387,7 @@ function sendAmountToWinner(winnerUsername: string, channel: ChatChannel): void 
 
   bounty = 0;
 
-  let transactionFeePromises = [];
+  const transactionFeePromises: Array<Promise<any>> = [];
 
   snipe.participants.forEach((participant) => {
      bounty += parseFloat(participant.transaction.amount);
@@ -410,42 +401,34 @@ function sendAmountToWinner(winnerUsername: string, channel: ChatChannel): void 
     bounty = _.round(bounty, 7);
     console.log("now rounded", bounty);
 
-
     //  If winnerUsername is a participant in this chat, moneySend
     //  Otherwise, use stellar.expert.xlm method
     bot.team.listTeamMemberships({
-      team: channel.name
+      team: channel.name,
     }).then((res) => {
 
-
-      let allMembers = [];
-      allMembers = allMembers.concat(res.members.owners.map(u => u.username));
-      allMembers = allMembers.concat(res.members.admins.map(u => u.username));
-      allMembers = allMembers.concat(res.members.writers.map(u => u.username));
-      allMembers = allMembers.concat(res.members.readers.map(u => u.username));
+      let allMembers: Array<string> = [];
+      allMembers = allMembers.concat(res.members.owners.map((u) => u.username));
+      allMembers = allMembers.concat(res.members.admins.map((u) => u.username));
+      allMembers = allMembers.concat(res.members.writers.map((u) => u.username));
+      allMembers = allMembers.concat(res.members.readers.map((u) => u.username));
 
       // it's possible the winner is not in the chat, that they won through a onBehalfOf contribution of someone else
-      if(allMembers.indexOf(winnerUsername) === -1) {
+      if (allMembers.indexOf(winnerUsername) === -1) {
         bot.wallet.send(winnerUsername, bounty.toString()).then((txn) => {
-          let bountyMsg = `\`+${bounty}XLM@${winnerUsername}\` `;
+          let bountyMsg: string = `\`+${bounty}XLM@${winnerUsername}\` `;
           bountyMsg += `:arrow_right: `;
           bountyMsg += `https://stellar.expert/explorer/public/tx/${txn.txId}`;
           snipe.chatSend(bountyMsg);
         });
-      }
-      else {
+      } else {
         snipe.moneySend(bounty, winnerUsername);
       }
-
-
     });
-
-
   });
 }
 
 function resolveFlip(channel: ChatChannel, winningNumber: number): string {
-
   let winnerUsername: string;
   const bettorRange: object = buildBettorRange(channel);
   Object.keys(bettorRange).forEach((username) => {
@@ -453,10 +436,8 @@ function resolveFlip(channel: ChatChannel, winningNumber: number): string {
       winnerUsername = username;
     }
   });
-
   sendAmountToWinner(winnerUsername, channel);
-
-  let snipe = activeSnipes[JSON.stringify(channel)];
+  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   snipe.chatSend(`Congrats to @${winnerUsername}`);
 
   return winnerUsername;
@@ -468,7 +449,7 @@ function buildBettorRange(channel: ChatChannel): any {
   const bettorRange: object = {};
   let start: number = 0;
 
-  Object.keys(snipe.positionSizes).sort((a,b) => {
+  Object.keys(snipe.positionSizes).sort((a, b) => {
     return snipe.positionSizes[a] > snipe.positionSizes[b] ? -1 : 1;
   }).forEach((username) => {
     bettorRange[username] = [start + 1, start + snipe.positionSizes[username]];
@@ -478,9 +459,9 @@ function buildBettorRange(channel: ChatChannel): any {
 }
 
 function displayFixedNice(a: number): string {
-  let aFormatted = a.toFixed(2).toString();
-  if(aFormatted.slice(-2,aFormatted.length) === "00") {
-    aFormatted = parseInt(aFormatted,10).toString();
+  let aFormatted: string = a.toFixed(2).toString();
+  if (aFormatted.slice(-2, aFormatted.length) === "00") {
+    aFormatted = parseInt(aFormatted, 10).toString();
   }
   return aFormatted;
 }
@@ -489,48 +470,45 @@ function buildBettingTable(potSize: number, bettorRange: object): string {
 
   console.log("within BuildBettingTable, bettorRange:", bettorRange);
 
-  let maxValue = Math.max(..._.flatten(Object.values(bettorRange)));
-
-  let bettingTable = `Pot size: ${displayFixedNice(potSize)}XLM\n`;
-
-  let bettorRank = 1;
+  const maxValue: number = Math.max(..._.flatten(Object.values(bettorRange)));
+  let bettingTable: string = `Pot size: ${displayFixedNice(potSize)}XLM\n`;
+  let bettorRank: number = 1;
 
   Object.keys(bettorRange).forEach((username) => {
 
-    let chancePct = 100 * ( (1+(bettorRange[username][1] - bettorRange[username][0])) / maxValue);
+    const chancePct: number = 100 * ( (1 + (bettorRange[username][1] - bettorRange[username][0])) / maxValue);
 
     bettingTable += `\n${bettorRank}. @${username}: \``;
     bettorRank += 1;
-    if(bettorRange[username][0] === bettorRange[username][1]) {
+    if (bettorRange[username][0] === bettorRange[username][1]) {
       bettingTable += `${bettorRange[username][0]}\``;
-    }
-    else {
-      bettingTable += `${bettorRange[username][0].toLocaleString()} - ${bettorRange[username][1].toLocaleString()}\``
+    } else {
+      bettingTable += `${bettorRange[username][0].toLocaleString()} - ${bettorRange[username][1].toLocaleString()}\``;
     }
     bettingTable += ` (${displayFixedNice(chancePct)}% chance)`;
   });
 
   return bettingTable;
 
-};
+}
 
-function makeSubteamForFlip(channel: ChatChannel) {
+function makeSubteamForFlip(channel: ChatChannel): void {
 
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-  const subteamName = `croupierflips.snipe${snipe.snipeId}`;
+  const subteamName: string = `croupierflips.snipe${snipe.snipeId}`;
 
-  let usernamesToAdd = [{"username": "croupier", "role": "admin"}];
-  Object.keys(snipe.positionSizes).forEach(username => {
+  const usernamesToAdd: Array<object> = [{username: "croupier", role: "admin"}];
+  Object.keys(snipe.positionSizes).forEach((username) => {
     usernamesToAdd.push({
-      "username": username,
-      "role": "reader"
+      role: "reader",
+      username,
     });
   });
-  bot.team.createSubteam(subteamName).then(res => {
+  bot.team.createSubteam(subteamName).then((res) => {
     bot.team.addMembers({
-      "team": subteamName,
-      "usernames": usernamesToAdd
-    }).then(res => {
+      team: subteamName,
+      usernames: usernamesToAdd,
+    }).then((addMembersRes) => {
       const newSubteam: ChatChannel = {
         membersType: "team", name: subteamName,
       };
@@ -539,7 +517,6 @@ function makeSubteamForFlip(channel: ChatChannel) {
   });
 
 }
-
 
 function flip(channel: ChatChannel, whereToFlip: ChatChannel): void {
 
@@ -844,7 +821,7 @@ function loadActiveSnipes(): object {
           popularityContests: [],
           positionSizes: JSON.parse(result.position_sizes),
           potSizeStored: parseInt(result.potSize, 10),
-          snipeId: result.id,
+          snipeId: parseInt(result.id, 10),
           timeout: null,
         };
       });
