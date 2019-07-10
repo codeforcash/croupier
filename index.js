@@ -37,15 +37,15 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 exports.__esModule = true;
 var _ = require("lodash");
-var mysql = require("mysql");
 var moment = require("moment");
+var mysql = require("mysql");
 var os = require("os");
-var Bot = require("./keybase-bot");
-var throttledQueue = require("throttled-queue");
 var sourceMapSupport = require("source-map-support");
+var throttledQueue = require("throttled-queue");
+var Bot = require("./keybase-bot");
 // import "source-map-support/register";
 sourceMapSupport.install({
-    environment: 'node'
+    environment: "node"
 });
 var bot = new Bot(os.homedir());
 var bot2 = new Bot(os.homedir());
@@ -53,61 +53,65 @@ var botUsername = "croupier";
 var paperkey = process.env.CROUPIER_PAPERKEY_1;
 var paperkey2 = process.env.CROUPIER_PAPERKEY_2;
 var activeSnipes;
+var sassyPopularityContestDescription = "Put it to a vote: who does the group like more, ";
+sassyPopularityContestDescription += "you or the pot leader?  If the pot leader wins, your ";
+sassyPopularityContestDescription += "position is reduced to 1.  If you win, you and the pot ";
+sassyPopularityContestDescription += "leader swap position sizes!";
 var powerups = [
     {
-        name: 'nuke',
         description: "Go nuclear and play everyone's powerups in the order they were received",
-        reaction: ':radioactive_sign:',
-        emoji: '☢️'
+        emoji: "☢️",
+        name: "nuke",
+        reaction: ":radioactive_sign:"
     },
     {
-        name: 'freeze',
-        description: 'For the next 10 seconds, powerups and bets are worthless and increase your position by 1',
-        reaction: ':shaved_ice:',
-        emoji: '🍧'
+        description: "For the next 10 seconds, powerups and bets are worthless and increase your position by 1",
+        emoji: "🍧",
+        name: "freeze",
+        reaction: ":shaved_ice:"
     },
     {
-        name: 'the-final-countdown',
         description: "o/` It's the final countdown!  Reset the clock to 1 minute",
-        reaction: ':man_dancing:',
-        emoji: '🕺'
+        emoji: "🕺",
+        name: "the-final-countdown",
+        reaction: ":man_dancing:"
     },
     {
-        name: 'level-the-playing-field',
         description: "Level the playing field and reset everybody's positions to 1",
-        reaction: ':rainbow-flag:',
-        emoji: '🏳️‍🌈'
+        emoji: "🏳️‍🌈",
+        name: "level-the-playing-field",
+        reaction: ":rainbow-flag:"
     },
     {
-        name: 'popularity-contest',
-        description: 'Put it to a vote: who does the group like more, you or the pot leader?  If the pot leader wins, your position is reduced to 1.  If you win, you and the pot leader swap position sizes!',
-        reaction: ':dancers:',
-        emoji: '👯'
+        description: sassyPopularityContestDescription,
+        emoji: "👯",
+        name: "popularity-contest",
+        reaction: ":dancers:"
     },
     {
-        name: 'half-life',
-        description: 'Cut the remaining time in half',
-        reaction: ':hourglass:',
-        emoji: '⌛'
+        description: "Cut the remaining time in half",
+        emoji: "⌛",
+        name: "half-life",
+        reaction: ":hourglass:"
     },
     {
-        name: 'double-life',
-        description: 'Double the remaining time',
-        reaction: ':hourglass_flowing_sand:',
-        emoji: '⏳'
+        description: "Double the remaining time",
+        emoji: "⏳",
+        name: "double-life",
+        reaction: ":hourglass_flowing_sand:"
     },
     {
-        name: 'assassin',
         description: "Reduce the pot leader's position size to 1",
-        reaction: ':gun:',
-        emoji: '🔫'
+        emoji: "🔫",
+        name: "assassin",
+        reaction: ":gun:"
     },
     {
-        name: 'double-edged-sword',
-        description: 'Your position size has an even chance of doubling/halving',
-        reaction: ':dagger_knife:',
-        emoji: '🗡'
-    }
+        description: "Your position size has an even chance of doubling/halving",
+        emoji: "🗡",
+        name: "double-edged-sword",
+        reaction: ":dagger_knife:"
+    },
 ];
 function updateSnipeLog(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
@@ -122,7 +126,7 @@ function updateSnipeLog(channel) {
         user: process.env.MYSQL_USER
     });
     connection.connect();
-    connection.query("\n    UPDATE snipes SET\n    participants=" + connection.escape(participants) + ",\n    position_sizes=" + connection.escape(positionSizes) + ",\n    blinds=" + connection.escape(blinds) + ";\n    WHERE\n    id=" + connection.escape(snipeId), function (error, results, fields) {
+    connection.query("\n    UPDATE snipes SET\n    participants=" + connection.escape(participants) + ",\n    position_sizes=" + connection.escape(positionSizes) + ",\n    blinds=" + connection.escape(blinds) + ",\n    pot_size=" + connection.escape(calculatePotSize(channel)) + ",\n    clock_remaining=" + connection.escape(getTimeLeft(snipe)) + "\n    WHERE\n    id=" + connection.escape(snipeId), function (error, results, fields) {
         if (error) {
             console.log(error);
         }
@@ -155,15 +159,14 @@ function shouldIssuePowerup(channel) {
     }
 }
 function issuePowerup(channel, participantIndex) {
-    // let award = _.sample(powerups);
-    var award = powerups[0];
+    var award = _.sample(powerups);
     var snipe = activeSnipes[JSON.stringify(channel)];
     snipe.participants[participantIndex].powerup = {
         award: award,
-        awardedAt: +new Date,
-        usedAt: null,
+        awardedAt: +new Date(),
         participantIndex: participantIndex,
-        reactionId: null
+        reactionId: null,
+        usedAt: null
     };
     var awardee = snipe.participants[participantIndex].username;
     snipe.chatSend("Congrats @" + awardee + ", you won the **" + award.name + "** powerup.\n    *" + award.description + "*\n    Click the emoji to consume the powerup.").then(function (msg) {
@@ -175,7 +178,7 @@ function addSnipeParticipant(channel, txn, onBehalfOf) {
     var snipe = activeSnipes[JSON.stringify(channel)];
     var newParticipant;
     var betBeneficiary;
-    if (typeof (onBehalfOf) === 'undefined') {
+    if (typeof (onBehalfOf) === "undefined") {
         newParticipant = {
             transaction: txn,
             username: txn.fromUsername
@@ -184,14 +187,14 @@ function addSnipeParticipant(channel, txn, onBehalfOf) {
     }
     else {
         newParticipant = {
+            onBehalfOf: onBehalfOf,
             transaction: txn,
-            username: txn.fromUsername,
-            onBehalfOf: onBehalfOf
+            username: txn.fromUsername
         };
         betBeneficiary = onBehalfOf;
     }
     snipe.participants.push(newParticipant);
-    if (typeof (snipe.positionSizes[betBeneficiary]) === 'undefined') {
+    if (typeof (snipe.positionSizes[betBeneficiary]) === "undefined") {
         snipe.positionSizes[betBeneficiary] = Math.floor(txn.amount / 0.01);
     }
     else {
@@ -223,7 +226,9 @@ function logNewSnipe(channel) {
 }
 function documentSnipe(channel, reason) {
     var snipeId = activeSnipes[JSON.stringify(channel)].snipeId;
-    var was_cancelled, winner, cancellation_reason;
+    var wasCancelled;
+    var winner;
+    var cancellationReason;
     var connection = mysql.createConnection({
         database: process.env.MYSQL_DB,
         host: process.env.MYSQL_HOST,
@@ -231,17 +236,17 @@ function documentSnipe(channel, reason) {
         user: process.env.MYSQL_USER
     });
     connection.connect();
-    if (reason === 'lack-of-participants' || reason === 'flip-error') {
-        was_cancelled = 1;
+    if (reason === "lack-of-participants" || reason === "flip-error") {
+        wasCancelled = 1;
         winner = null;
-        cancellation_reason = reason;
+        cancellationReason = reason;
     }
     else {
-        was_cancelled = 0;
+        wasCancelled = 0;
         winner = reason;
-        cancellation_reason = null;
+        cancellationReason = null;
     }
-    connection.query("UPDATE snipes\n    SET\n      winner=" + connection.escape(winner) + ",\n      was_cancelled=" + connection.escape(was_cancelled) + ",\n      cancellation_reason=" + connection.escape(cancellation_reason) + ",\n      in_progress=0\n    WHERE\n      id=" + connection.escape(snipeId) + "\n    ", function (error, results, fields) {
+    connection.query("UPDATE snipes\n    SET\n      winner=" + connection.escape(winner) + ",\n      was_cancelled=" + connection.escape(wasCancelled) + ",\n      cancellation_reason=" + connection.escape(cancellationReason) + ",\n      in_progress=0\n    WHERE\n      id=" + connection.escape(snipeId) + "\n    ", function (error, results, fields) {
         if (error) {
             console.log(error);
         }
@@ -254,7 +259,7 @@ function calculateTransactionFees(txn) {
             var xlmFeeMatch = details.feeChargedDescription.match(/(\d\.\d+) XLM/);
             if (xlmFeeMatch !== null) {
                 var fee = parseFloat(xlmFeeMatch[1]);
-                console.log('fee', fee);
+                console.log("fee", fee);
                 resolve(fee);
             }
         });
@@ -352,7 +357,7 @@ function displayFixedNice(a) {
     return aFormatted;
 }
 function buildBettingTable(potSize, bettorRange) {
-    console.log('within BuildBettingTable, bettorRange:', bettorRange);
+    console.log("within BuildBettingTable, bettorRange:", bettorRange);
     var maxValue = Math.max.apply(Math, _.flatten(Object.values(bettorRange)));
     var bettingTable = "Pot size: " + displayFixedNice(potSize) + "XLM\n";
     var bettorRank = 1;
@@ -370,22 +375,21 @@ function buildBettingTable(potSize, bettorRange) {
     });
     return bettingTable;
 }
-;
 function makeSubteamForFlip(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
     var subteamName = "croupierflips.snipe" + snipe.snipeId;
-    var usernamesToAdd = [{ "username": "croupier", "role": "admin" }];
+    var usernamesToAdd = [{ username: "croupier", role: "admin" }];
     Object.keys(snipe.positionSizes).forEach(function (username) {
         usernamesToAdd.push({
-            "username": username,
-            "role": "reader"
+            role: "reader",
+            username: username
         });
     });
     bot.team.createSubteam(subteamName).then(function (res) {
         bot.team.addMembers({
-            "team": subteamName,
-            "usernames": usernamesToAdd
-        }).then(function (res) {
+            team: subteamName,
+            usernames: usernamesToAdd
+        }).then(function (addMembersRes) {
             var newSubteam = {
                 membersType: "team", name: subteamName
             };
@@ -394,7 +398,7 @@ function makeSubteamForFlip(channel) {
     });
 }
 function flip(channel, whereToFlip) {
-    if (typeof (whereToFlip) === 'undefined') {
+    if (typeof (whereToFlip) === "undefined") {
         whereToFlip = channel;
     }
     var bettorRange = buildBettorRange(channel);
@@ -404,7 +408,7 @@ function flip(channel, whereToFlip) {
     var maxBet = flatBettingValues.reduce(function (a, b) { return Math.max(a, b); });
     var bettingTable = buildBettingTable(calculatePotSize(channel), bettorRange);
     bot2.chat.send(whereToFlip, {
-        body: '**Final betting table...**'
+        body: "**Final betting table...**"
     });
     bot2.chat.send(whereToFlip, {
         body: bettingTable
@@ -450,25 +454,28 @@ function processNewBet(txn, msg) {
             // new wallets
             checkWalletBalance(onBehalfOfRecipient_1).then(function (balance) {
                 if (balance === null || balance < 2.01) {
-                    snipe.chatSend('Betting on behalf of someone else?  Seems like they do not have a wallet yet, so your bet must be at least 2.01XLM');
+                    var sassyMessage = "Betting on behalf of someone else?  ";
+                    sassyMessage += "Seems like they do not have a wallet yet, ";
+                    sassyMessage += "so your bet must be at least 2.01XLM";
+                    snipe.chatSend(sassyMessage);
                     processRefund(txn, msg.channel);
                     resolve(false);
                 }
-                else if (typeof (snipe.positionSizes[txn.fromUsername]) === 'undefined') {
-                    snipe.chatSend('You cannot bet on behalf of someone else unless you are participating as well');
+                else if (typeof (snipe.positionSizes[txn.fromUsername]) === "undefined") {
+                    snipe.chatSend("You cannot bet on behalf of someone else unless you are participating as well");
                     resolve(false);
                 }
                 else {
                     addSnipeParticipant(channel, txn, onBehalfOfRecipient_1);
                     snipe.chatSend("@" + onBehalfOfRecipient_1 + " is locked into the snipe, thanks to @" + txn.fromUsername + "!");
-                    bot.chat.react(channel, msg.id, ':gift:');
+                    bot.chat.react(channel, msg.id, ":gift:");
                     resolve(true);
                 }
             });
         }
         else {
             addSnipeParticipant(channel, txn, undefined);
-            snipe.chatSend("@" + txn.fromUsername + " is locked into the snipe!");
+            bot.chat.react(channel, msg.id, ":heavy_check_mark:");
             resolve(true);
         }
     });
@@ -512,15 +519,9 @@ function processTxnDetails(txn, msg) {
         var moneyThrottle_1 = throttledQueue(5, 5000);
         activeSnipes[JSON.stringify(channel)] = {
             betting_open: true,
-            betting_started: +new Date,
-            clock: null,
-            participants: [],
-            timeout: null,
-            countdown: countdown,
-            reFlips: 3,
-            positionSizes: {},
+            betting_started: +new Date(),
+            betting_stops: moment().add(countdown, "seconds"),
             blinds: 0.01,
-            popularityContests: [],
             chatSend: function (message) {
                 return new Promise(function (resolve) {
                     chatThrottle_1(function () {
@@ -532,6 +533,8 @@ function processTxnDetails(txn, msg) {
                     });
                 });
             },
+            clock: null,
+            countdown: countdown,
             moneySend: function (amount, recipient) {
                 return new Promise(function (resolve) {
                     moneyThrottle_1(function () {
@@ -539,7 +542,12 @@ function processTxnDetails(txn, msg) {
                         resolve(true);
                     });
                 });
-            }
+            },
+            participants: [],
+            popularityContests: [],
+            positionSizes: {},
+            reFlips: 3,
+            timeout: null
         };
         logNewSnipe(channel).then(function (snipeId) {
             snipe = activeSnipes[JSON.stringify(channel)];
@@ -566,7 +574,13 @@ function processTxnDetails(txn, msg) {
 }
 function calculatePotSize(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
-    var sum = 0;
+    var sum;
+    if (snipe.potSizeStored) { // temp solution while we build a server solution robust enough to hold big data
+        sum = snipe.potSizeStored;
+    }
+    else {
+        sum = 0;
+    }
     snipe.participants.forEach(function (participant) {
         sum += parseFloat(participant.transaction.amount);
     });
@@ -590,9 +604,10 @@ function resetSnipeClock(channel) {
         });
     }
     var timeRemaining = Math.ceil(getTimeLeft(snipe));
-    console.log('time remaining', timeRemaining);
+    console.log("time remaining", timeRemaining);
     clearTimeout(snipe.timeout);
-    var boost, timerEndsInSeconds;
+    var boost;
+    var timerEndsInSeconds;
     if (timeRemaining <= 30) {
         timerEndsInSeconds = 60;
     }
@@ -600,11 +615,11 @@ function resetSnipeClock(channel) {
         boost = 10;
         timerEndsInSeconds = timeRemaining + boost;
     }
-    snipe.betting_stops = moment().add(timerEndsInSeconds, 'seconds');
+    snipe.betting_stops = moment().add(timerEndsInSeconds, "seconds");
     bot.chat["delete"](channel, snipe.clock, {});
-    snipe.chatSend("Betting stops " + moment().to(snipe.betting_stops)).then(function (sentMessage) {
-        console.log('just sent the parent betting stops message in resetSnipeClock');
-        console.log('sentMessage', sentMessage);
+    snipe.chatSend("+Betting stops " + moment().to(snipe.betting_stops)).then(function (sentMessage) {
+        console.log("just sent the parent betting stops message in resetSnipeClock");
+        console.log("sentMessage", sentMessage);
         snipe.clock = sentMessage.id;
     });
     var finalizeBetsTimeout = setTimeout(function () {
@@ -631,34 +646,37 @@ function loadActiveSnipes() {
                 var moneyThrottle = throttledQueue(5, 5000);
                 var channel = JSON.parse(result.channel);
                 snipes[JSON.stringify(channel)] = {
-                    snipeId: result.id,
-                    betting_started: result.betting_started,
                     betting_open: true,
-                    clock: null,
-                    participants: JSON.parse(result.participants),
-                    timeout: null,
-                    countdown: result.countdown,
-                    positionSizes: JSON.parse(result.position_sizes),
-                    blinds: result.blinds,
-                    popularityContests: [],
+                    betting_started: parseInt(result.betting_started, 10),
+                    blinds: parseFloat(result.blinds),
                     chatSend: function (message) {
-                        return new Promise(function (resolve) {
+                        return new Promise(function (resolveChatThrottle) {
                             chatThrottle(function () {
                                 bot.chat.send(channel, {
                                     body: message
                                 }).then(function (messageId) {
-                                    resolve(messageId);
+                                    resolveChatThrottle(messageId);
                                 });
                             });
                         });
                     },
+                    clock: null,
+                    clockRemaining: result.clock_remaining,
+                    countdown: result.countdown,
                     moneySend: function (amount, recipient) {
-                        return new Promise(function (resolve) {
+                        return new Promise(function (resolveMoneyThrottle) {
                             moneyThrottle(function () {
                                 bot.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient);
+                                resolveMoneyThrottle();
                             });
                         });
-                    }
+                    },
+                    participants: JSON.parse(result.participants),
+                    popularityContests: [],
+                    positionSizes: JSON.parse(result.position_sizes),
+                    potSizeStored: parseInt(result.potSize, 10),
+                    snipeId: parseInt(result.id, 10),
+                    timeout: null
                 };
             });
             resolve(snipes);
@@ -669,12 +687,18 @@ function loadActiveSnipes() {
 function launchSnipe(channel) {
     // Tell the channel: OK, your snipe has been accepted for routing.
     var snipe = activeSnipes[JSON.stringify(channel)];
-    var message = "The snipe is on (**#" + activeSnipes[JSON.stringify(channel)].snipeId + "**).  Bet in multiples of 0.01XLM.  Betting format:";
+    var message = "The snipe is on (**#" + activeSnipes[JSON.stringify(channel)].snipeId + "**).  ";
+    message += "Bet in multiples of 0.01XLM.  Betting format:";
     message += "```+0.01XLM@" + botUsername + "```";
-    message += "Minimum bet: " + snipe.blinds + "XLM";
+    message += "Minimum bet: " + displayFixedNice(snipe.blinds) + "XLM";
     snipe.chatSend(message);
-    snipe.betting_stops = moment().add(snipe.countdown, 'seconds');
-    snipe.chatSend("Betting stops " + moment().to(snipe.betting_stops)).then(function (sentMessage) {
+    if (snipe.clockRemaining === null) {
+        snipe.betting_stops = moment().add(snipe.countdown, "seconds");
+    }
+    else {
+        snipe.betting_stops = moment().add(snipe.clockRemaining, "seconds");
+    }
+    snipe.chatSend("-Betting stops " + moment().to(snipe.betting_stops)).then(function (sentMessage) {
         snipe.clock = sentMessage.id;
         runClock(channel);
     });
@@ -696,12 +720,12 @@ function refundAllParticipants(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
     var bets = {};
     snipe.participants.forEach(function (participant) {
-        if (typeof (bets[participant.transaction.fromUsername]) === 'undefined') {
-            var b = {
+        if (typeof (bets[participant.transaction.fromUsername]) === "undefined") {
+            var betData = {
                 fees: [],
                 wagers: []
             };
-            bets[participant.transaction.fromUsername] = b;
+            bets[participant.transaction.fromUsername] = betData;
         }
         bets[participant.transaction.fromUsername].fees.push(calculateTransactionFees(participant.transaction));
         bets[participant.transaction.fromUsername].wagers.push(participant.transaction.amount);
@@ -709,13 +733,15 @@ function refundAllParticipants(channel) {
     var participantList = Object.keys(bets);
     participantList.forEach(function (participant) {
         Promise.all(bets[participant].fees).then(function (fees) {
-            console.log('fees', fees);
+            console.log("fees", fees);
             var feeSum = fees.reduce(function (a, b) { return parseFloat(a.toString()) + parseFloat(b.toString()); });
-            console.log('feeSum', feeSum);
-            var wagerSum = bets[participant].wagers.reduce(function (a, b) { return parseFloat(a.toString()) + parseFloat(b.toString()); });
-            console.log('wagerSum', wagerSum);
+            console.log("feeSum", feeSum);
+            var wagerSum = bets[participant].wagers.reduce(function (a, b) {
+                return parseFloat(a.toString()) + parseFloat(b.toString());
+            });
+            console.log("wagerSum", wagerSum);
             var refund = _.round(wagerSum - feeSum, 7);
-            console.log('refund', refund);
+            console.log("refund", refund);
             snipe.moneySend(refund, participant);
         });
     });
@@ -723,7 +749,9 @@ function refundAllParticipants(channel) {
 function executeFlipOrCancel(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
     if (typeof (snipe) !== "undefined") {
-        var participantUsernames = snipe.participants.map(function (participant) { return participant.onBehalfOf || participant.username; });
+        var participantUsernames = snipe.participants.map(function (participant) {
+            return participant.onBehalfOf || participant.username;
+        });
         var uniqParticipants = _.union(participantUsernames);
         if (uniqParticipants.length > 1) {
             flip(channel, channel);
@@ -731,7 +759,7 @@ function executeFlipOrCancel(channel) {
         else {
             refundAllParticipants(channel);
             snipe.chatSend("The snipe has been canceled due to a lack of participants.");
-            clearSnipe(channel, 'lack-of-participants');
+            clearSnipe(channel, "lack-of-participants");
         }
     }
 }
@@ -741,7 +769,7 @@ function cancelFlip(conversationId, channel, err) {
     if (typeof (activeSnipes[JSON.stringify(channel)]) !== "undefined") {
         snipe.chatSend("The flip has been cancelled due to error, and everyone is getting a refund");
         refundAllParticipants(channel);
-        clearSnipe(channel, 'flip-error');
+        clearSnipe(channel, "flip-error");
     }
 }
 function getChannelFromSnipeId(snipeId) {
@@ -751,37 +779,6 @@ function getChannelFromSnipeId(snipeId) {
         }
     });
 }
-function flipInOurTeam(channel) {
-    var snipe = activeSnipes[JSON.stringify(channel)];
-    var teamName = "croupierflips.snipe" + snipe.snipeId;
-    var subChannel = {
-        membersType: "team", name: teamName, public: false, topicType: "chat"
-    };
-    bot.team.createSubteam(teamName).then(function (result) {
-        console.log('result for creating subteam', result);
-        // invite all the participants - should probably throttle this.
-        var usernamesToInvite = Object.keys(snipe.positionSizes).map(function (username) {
-            return {
-                "username": username,
-                "role": "reader"
-            };
-        });
-        usernamesToInvite = usernamesToInvite.concat({
-            "username": "croupier",
-            "role": "admin"
-        });
-        bot.team.addMembers({
-            "team": teamName,
-            "usernames": usernamesToInvite
-        }).then(function (res) {
-            console.log('result for adding members', res);
-            bot.chat.send(subChannel, {
-                body: '/flip'
-            });
-        });
-    });
-    return snipe;
-}
 function getOriginChannel(channelName) {
     var channelMatch = channelName.match(/croupierflips.snipe(\d+)/);
     var snipeId = channelMatch[1];
@@ -789,7 +786,8 @@ function getOriginChannel(channelName) {
 }
 var flipMonitorIntervals = {};
 function monitorFlipResults(msg) {
-    var snipe, ourChannel;
+    var snipe;
+    var ourChannel;
     var channelMatch = msg.channel.name.match(/croupierflips.snipe(\d+)/);
     if (channelMatch === null) {
         snipe = activeSnipes[JSON.stringify(msg.channel)];
@@ -824,15 +822,15 @@ function monitorFlipResults(msg) {
                     // remove the offender from the team
                     // clear the interval
                     // run the flip again
-                    bot.chat.getFlipData(msg.conversationId, msg.content.flip.flipConvId, msg.id, msg.content.flip.gameId).then(function (res, stdout, stderr) {
-                        console.log('getflipdata res!');
-                        console.log(res);
+                    bot.chat.getFlipData(msg.conversationId, msg.content.flip.flipConvId, msg.id, msg.content.flip.gameId).then(function (getFlipDataRes, stdout, stderr) {
+                        console.log("getflipdata res!");
+                        console.log(getFlipDataRes);
                         var errorInfo = JSON.parse(stdout).result.status.errorInfo;
                         if (errorInfo.dupreg && errorInfo.dupreg.user) {
                             bot.team.removeMember({
                                 team: msg.channel.name,
                                 username: errorInfo.dupreg.user
-                            }).then(function (res) {
+                            }).then(function (removeMemberRes) {
                                 snipe.chatSend("We have punted " + errorInfo.dupreg.user + " for duplicate registration issues");
                                 flip(getOriginChannel(msg.channel.name), msg.channel);
                                 clearInterval(flipMonitorIntervals[msg.conversationId]);
@@ -845,7 +843,10 @@ function monitorFlipResults(msg) {
                     });
                 }
                 else {
-                    snipe.chatSend('Due to error, we are going to re-cast the flip in a separate subteam over which we have governance and can kick anyone with a duplicate registration.');
+                    var flipErrorMessage = "Due to error, we are going to re-cast the flip in a ";
+                    flipErrorMessage += "separate subteam over which we have governance and can kick anyone ";
+                    flipErrorMessage += "with a duplicate registration.";
+                    snipe.chatSend(flipErrorMessage);
                     var teamName = "croupierflips.snipe" + snipe.snipeId;
                     var subChannel = {
                         membersType: "team", name: teamName, public: false, topicType: "chat"
@@ -861,7 +862,7 @@ function monitorFlipResults(msg) {
     }), 1000);
 }
 function adjustBlinds(channel) {
-    var now = +new Date;
+    var now = +new Date();
     var snipe = activeSnipes[JSON.stringify(channel)];
     var secondsElapsed = Math.floor((now - snipe.betting_started) / 1000);
     var minutesElapsed = Math.floor(secondsElapsed / 60.0);
@@ -871,19 +872,19 @@ function adjustBlinds(channel) {
     }
     else {
         blinds = 0.01 * Math.pow(2, Math.floor((minutesElapsed - 10) / 5));
-        blinds = Math.round((blinds + 0.00001) * 100) / 100; // scale to 2 dp  per https://stackoverflow.com/questions/11832914/round-to-at-most-2-decimal-places-only-if-necessary
+        // c.f. https://stackoverflow.com/questions/11832914/round-to-at-most-2-decimal-places-only-if-necessary
+        blinds = Math.round((blinds + 0.00001) * 100) / 100; // scale to 2 dp
     }
     if (blinds !== snipe.blinds) {
         snipe.blinds = blinds;
         updateSnipeLog(channel);
-        snipe.chatSend("Blinds are raised to **" + blinds + "**");
+        snipe.chatSend("Blinds are raised to **" + displayFixedNice(blinds) + "XLM**");
     }
 }
 var runningClocks = {};
 function runClock(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
     var seconds = getTimeLeft(snipe);
-    console.log("according to runClock, the timeLeft is " + seconds);
     try {
         adjustBlinds(channel);
         // :hourglass: :hourglass_flowing_sand:
@@ -896,14 +897,14 @@ function runClock(channel) {
             else {
                 hourglass = ":hourglass_flowing_sand:";
             }
-            var stops_when = moment().to(snipe.betting_stops);
+            var stopsWhen = moment().to(snipe.betting_stops);
             if (seconds < 55) {
-                stops_when = "in " + seconds + " seconds";
+                stopsWhen = "in " + seconds + " seconds";
             }
             console.log("attempting to edit message " + snipe.clock + " in channel " + channel);
             bot.chat.edit(channel, snipe.clock, {
                 message: {
-                    body: hourglass + (" betting stops " + stops_when)
+                    body: hourglass + (" betting stops " + stopsWhen)
                 }
             }).then(function (res) {
                 console.log(res);
@@ -913,7 +914,7 @@ function runClock(channel) {
         }
     }
     catch (e) {
-        console.log('ran into error in runClock fxn, ', e);
+        console.log("ran into error in runClock fxn, ", e);
         return;
     }
     if (seconds > 1) {
@@ -928,45 +929,46 @@ function runClock(channel) {
     }
 }
 function buildPowerupsTable(channel, whose) {
-    var table = '';
+    var table = "";
     var snipe = activeSnipes[JSON.stringify(channel)];
     var powerupsCount = {};
     snipe.participants.forEach(function (bet) {
         if (bet.powerup && bet.powerup.usedAt === null && bet.username === whose) {
-            var award = JSON.stringify(bet.powerup.award);
-            if (typeof (powerupsCount[award]) === 'undefined') {
-                powerupsCount[award] = 0;
+            var awardJsonified = JSON.stringify(bet.powerup.award);
+            if (typeof (powerupsCount[awardJsonified]) === "undefined") {
+                powerupsCount[awardJsonified] = 0;
             }
-            powerupsCount[award] += 1;
+            powerupsCount[awardJsonified] += 1;
         }
     });
     Object.keys(powerupsCount).forEach(function (awardJsonified) {
         var award = JSON.parse(awardJsonified);
-        table += powerupsCount[awardJsonified] + "x " + award.emoji + " **" + award.name + "**: " + award.description + "\n";
+        table += powerupsCount[awardJsonified] + "x " + award.reaction + " **" + award.name + "**: " + award.description + "\n";
     });
     return table;
 }
 function checkTextForPowerup(msg) {
     var snipe = activeSnipes[JSON.stringify(msg.channel)];
-    if (typeof (snipe) === 'undefined') {
+    if (typeof (snipe) === "undefined") {
         return;
     }
-    var powerupsQuery = msg.content.text.body.match(/(.powerups|🐶)\s?@?(\w+)?/);
+    // would be better to have the regexp match object type
+    var powerupsQuery = msg.content.text.body.match(/(.powerups|🐶|:dog:)\s?@?(\w+)?/);
     if (powerupsQuery !== null) {
-        if (typeof (powerupsQuery[2]) !== 'undefined') {
+        if (typeof (powerupsQuery[2]) !== "undefined") {
             var whose = powerupsQuery[1];
             if (snipe.positionSizes[whose] > 10) {
                 snipe.positionSizes[whose] -= 10;
-                var str = buildPowerupsTable(msg.channel, whose);
-                snipe.sendChat(str + "\nIt cost @" + msg.sender.username + " 10 position to scope @" + whose + " powerups");
+                var powerupsTable = buildPowerupsTable(msg.channel, whose);
+                snipe.chatSend(powerupsTable + "\nIt cost @" + msg.sender.username + " 10 position to scope @" + whose + " powerups");
             }
         }
         else {
             var whose = msg.sender.username;
             if (snipe.positionSizes[whose] > 1) {
                 snipe.positionSizes[whose] -= 1;
-                var str = buildPowerupsTable(msg.channel, whose);
-                snipe.sendChat(str + "\nIt cost @" + whose + " 1 position to check their own powerups");
+                var powerupsTable = buildPowerupsTable(msg.channel, whose);
+                snipe.chatSend(powerupsTable + "\nIt cost @" + whose + " 1 position to check their own powerups");
             }
         }
         return;
@@ -984,24 +986,18 @@ function checkTextForPowerup(msg) {
         });
     }
 }
-;
 function checkReactionForPowerup(msg) {
     var snipe = activeSnipes[JSON.stringify(msg.channel)];
-    if (typeof (snipe) === 'undefined') {
+    if (typeof (snipe) === "undefined") {
         return;
     }
     var reactionId = msg.id;
-    var reaction = msg.content.reaction;
-    console.log('Checking for powerup');
-    console.log('msg.sender.username', msg.sender.username);
+    var reactionContent = msg.content;
     snipe.participants.forEach(function (bet) {
         if (msg.sender.username === bet.username) {
             if (bet.powerup && bet.powerup.usedAt === null) {
-                console.log('reaction.b', reaction.b);
-                console.log('bet powerup award reaction', bet.powerup.award.reaction);
-                console.log('reaction.m', reaction.m);
-                console.log('bet powerup reactionId', bet.powerup.reactionId);
-                if (reaction.b === bet.powerup.award.reaction && reaction.m === bet.powerup.reactionId) {
+                if (reactionContent.reaction.b === bet.powerup.award.reaction &&
+                    reactionContent.reaction.m === bet.powerup.reactionId) {
                     consumePowerup(msg.channel, bet.powerup);
                 }
             }
@@ -1010,69 +1006,92 @@ function checkReactionForPowerup(msg) {
 }
 function findPotLead(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
-    var obj = snipe.positionSizes;
-    return _.maxBy(_.keys(obj), function (o) { return obj[o]; });
+    var positionSizes = snipe.positionSizes;
+    return _.maxBy(_.keys(positionSizes), function (username) {
+        return positionSizes[username];
+    });
 }
 function consumePowerup(channel, powerup) {
+    var sassyMessage;
     var snipe = activeSnipes[JSON.stringify(channel)];
     var consumer = snipe.participants[powerup.participantIndex].username;
     var leader = findPotLead(channel);
-    powerup.usedAt = +new Date;
+    powerup.usedAt = +new Date();
+    var doNotResetClock = false;
     switch (powerup.award.name) {
-        case 'nuke':
-            var unusedPowerups = snipe.participants.filter(function (p) { return p.powerup && typeof (p.powerup.usedAt) === 'undefined'; });
-            snipe.sendChat("@" + consumer + " went nuclear.  Enjoy the show :fireworks:.");
-            if (unusedPowerups.length === 0) {
-                snipe.sendChat("...well, that was awkward. All that nuclear FUD, and for what?");
-            }
+        case "nuke":
+            var unusedPowerupsLength_1 = snipe.participants.filter(function (p) {
+                return p.powerup && typeof (p.powerup.usedAt) === "undefined";
+            }).length;
+            snipe.chatSend("@" + consumer + " went nuclear.  Enjoy the show :fireworks:.").then(function () {
+                if (unusedPowerupsLength_1 === 0) {
+                    snipe.chatSend("...well, that was awkward. All that nuclear FUD, and for what?");
+                }
+            });
             snipe.participants.forEach(function (participant) {
                 if (participant.powerup) {
-                    var powerup_1 = participant.powerup;
-                    if (typeof (powerup_1.usedAt) === 'undefined') {
-                        consumePowerup(getChannelFromSnipeId(snipe.snipeId), powerup_1);
+                    if (participant.powerup.usedAt === null) {
+                        consumePowerup(getChannelFromSnipeId(snipe.snipeId), participant.powerup);
                     }
                 }
             });
             break;
-        case 'freeze':
-            snipe.sendChat("@" + consumer + " played Freeze.  Any action by anyone other than " + consumer + " or @croupier during the next 10 seconds will be ignored and instead increase " + consumer + "'s position by 1.");
+        case "freeze":
+            sassyMessage = "@" + consumer + " played Freeze.  ";
+            sassyMessage += "Any action by anyone other than " + consumer + " or @croupier during ";
+            sassyMessage += "the next 10 seconds will be ignored and instead increase " + consumer + "'s ";
+            sassyMessage += "position by 1.";
+            snipe.chatSend(sassyMessage);
             snipe.freeze = consumer;
             setTimeout(function () {
-                snipe.sendChat("@" + consumer + "'s freeze has expired!");
+                snipe.chatSend("@" + consumer + "'s freeze has expired!");
                 snipe.freeze = undefined;
             }, 1000 * 10);
             break;
-        case 'the-final-countdown':
-            snipe.betting_stops = moment().add(60, 'seconds');
-            snipe.sendChat("@" + consumer + " played The Final Countdown.  Will things ever be the same again?  60 seconds on the clock.   It's the final countdown.");
+        case "the-final-countdown":
+            snipe.betting_stops = moment().add(60, "seconds");
+            sassyMessage = "@" + consumer + " played The Final Countdown.  ";
+            sassyMessage += "Will things ever be the same again?  60 seconds on the clock.  ";
+            sassyMessage += "It's the final countdown.";
+            snipe.chatSend(sassyMessage);
+            doNotResetClock = true;
             break;
-        case 'level-the-playing-field':
+        case "level-the-playing-field":
             Object.keys(snipe.positionSizes).forEach(function (username) {
                 snipe.positionSizes[username] = 1;
             });
-            snipe.sendChat("@" + consumer + " leveled the playing field in a big way.  Everyone's positions are now equal.  One love.");
+            sassyMessage = "@" + consumer + " leveled the playing field in a big way.";
+            sassyMessage += "  Everyone's positions are now equal.  One love.";
+            snipe.chatSend(sassyMessage);
             break;
-        case 'half-life': // Cut the remaining time in half
+        case "half-life": // Cut the remaining time in half
             var timeToSubtract = Math.floor(getTimeLeft(snipe) / 2.0);
-            snipe.betting_stops = snipe.betting_stops.subtract(timeToSubtract, 'seconds');
-            snipe.sendChat("@" + consumer + " chopped " + timeToSubtract + " seconds off the clock.");
+            snipe.betting_stops = snipe.betting_stops.subtract(timeToSubtract, "seconds");
+            snipe.chatSend("@" + consumer + " chopped " + timeToSubtract + " seconds off the clock.");
+            doNotResetClock = true;
             break;
-        case 'double-life': // Double the remaining time
+        case "double-life": // Double the remaining time
             var timeToAdd = Math.floor(getTimeLeft(snipe));
-            snipe.betting_stops = snipe.betting_stops.add(timeToAdd, 'seconds');
-            snipe.sendChat("@" + consumer + " added " + timeToAdd + " seconds to the clock.");
+            snipe.betting_stops = snipe.betting_stops.add(timeToAdd, "seconds");
+            snipe.chatSend("@" + consumer + " added " + timeToAdd + " seconds to the clock.");
+            doNotResetClock = true;
             break;
-        case 'assassin': // Reduce the pot leader's position size to 1
+        case "assassin": // Reduce the pot leader's position size to 1
             snipe.positionSizes[leader] = 1;
-            snipe.chatSend("@" + consumer + "'s :gun: seriously injured @" + leader + " and their position size is now 1.");
+            sassyMessage = "@" + consumer + "'s :gun: seriously injured @" + leader + " and their position size is now 1.";
+            snipe.chatSend(sassyMessage);
             break;
-        case 'popularity-contest': // Put it to a vote: who does the group like more, you or the pot leader?  If the pot leader wins, your position is reduced to 1.  If you win, you and the pot leader swap position sizes!
+        case "popularity-contest":
             if (consumer === leader) {
                 snipe.chatSend("You cannot challenge yourself in this game. ::powerup fizzles::");
                 return;
             }
+            sassyMessage = "@" + consumer + " called a popularity contest to challenge @" + leader + "'s throne!";
+            sassyMessage += "  Whom do you prefer?  ";
+            sassyMessage += "First to 3 votes wins ";
+            sassyMessage += "(4 votes including the initial reaction seeded by me the Croupier)!";
             bot.chat.send(channel, {
-                body: "@" + consumer + " called a popularity contest to challenge @" + leader + "'s throne!  Whom do you prefer?  First to 3 votes wins (4 votes including the initial reaction seeded by me the Croupier)!"
+                body: sassyMessage
             }).then(function (msgData) {
                 var challengerReaction = bot.chat.react(channel, msgData.id, "" + consumer);
                 var leaderReaction = bot.chat.react(channel, msgData.id, "" + leader);
@@ -1087,14 +1106,18 @@ function consumePowerup(channel, powerup) {
                 });
             });
             break;
-        case 'double-edged-sword': // Even chance of halving or doubling one's position size
+        case "double-edged-sword": // Even chance of halving or doubling one's position size
             if (Math.random() >= 0.5) {
                 snipe.positionSizes[consumer] = 2 * snipe.positionSizes[consumer];
-                snipe.chatSend("A favorable day!  @" + consumer + "'s position size has doubled to " + snipe.positionSizes[consumer]);
+                sassyMessage = "A favorable day!  @" + consumer + "'s position size has doubled";
+                sassyMessage += " to " + snipe.positionSizes[consumer];
+                snipe.chatSend(sassyMessage);
             }
             else {
                 snipe.positionSizes[consumer] = Math.ceil(snipe.positionSizes[consumer] / 2);
-                snipe.chatSend("Ouch! @" + consumer + " cut their hand on the double edged sword and is now dealing with " + snipe.positionSizes[consumer] + ".");
+                sassyMessage = "Ouch! @" + consumer + " cut their hand on the double edged sword";
+                sassyMessage += " and is now dealing with " + snipe.positionSizes[consumer] + ".";
+                snipe.chatSend(sassyMessage);
             }
             break;
         default:
@@ -1102,24 +1125,26 @@ function consumePowerup(channel, powerup) {
             break;
     }
     updateSnipeLog(channel);
-    resetSnipeClock(channel);
+    if (!doNotResetClock) {
+        resetSnipeClock(channel);
+    }
 }
 function checkForPopularityContestVote(msg) {
     var snipe = activeSnipes[JSON.stringify(msg.channel)];
-    if (typeof (snipe) === 'undefined' || typeof (snipe.popularityContests) === 'undefined') {
+    if (typeof (snipe) === "undefined" || typeof (snipe.popularityContests) === "undefined") {
         return;
     }
     var reactionId = msg.id;
-    var reaction = msg.content.reaction;
+    var reactionContent = msg.content;
     snipe.popularityContests.forEach(function (contest) {
-        if (contest.pollMessageId === reaction.m) {
-            if (reaction.b === contest.leader) {
+        if (contest.pollMessageId === reactionContent.reaction.m) {
+            if (reactionContent.reaction.b === contest.leader) {
                 contest.votesForLeader.push(reactionId);
-                checkForPopularityContestEnd(msg.channel, reaction.m);
+                checkForPopularityContestEnd(msg.channel, reactionContent.reaction.m);
             }
-            else if (reaction.b === contest.challenger) {
+            else if (reactionContent.reaction.b === contest.challenger) {
                 contest.votesForChallenger.push(reactionId);
-                checkForPopularityContestEnd(msg.channel, reaction.m);
+                checkForPopularityContestEnd(msg.channel, reactionContent.reaction.m);
             }
         }
     });
@@ -1129,6 +1154,9 @@ function checkForPopularityContestVoteRemoval(msg) {
     var deleteReactionIds = msg.content["delete"].messageIDs;
     // check for open popularity contests.
     var snipe = activeSnipes[JSON.stringify(msg.channel)];
+    if (typeof (snipe) === "undefined") {
+        return;
+    }
     snipe.popularityContests.forEach(function (contest, contestIdx) {
         deleteReactionIds.forEach(function (reactionToDeleteId) {
             getIdx = contest.votesForLeader.indexOf(reactionToDeleteId);
@@ -1142,7 +1170,6 @@ function checkForPopularityContestVoteRemoval(msg) {
         });
     });
 }
-;
 function checkForPopularityContestEnd(channel, pollMessageId) {
     var snipe = activeSnipes[JSON.stringify(channel)];
     snipe.popularityContests.forEach(function (contest, contestIdx) {
@@ -1151,14 +1178,16 @@ function checkForPopularityContestEnd(channel, pollMessageId) {
             var challengerPositionSize = snipe.positionSizes[contest.challenger];
             snipe.positionSizes[contest.leader] = challengerPositionSize;
             snipe.positionSizes[contest.challenger] = leaderPositionSize;
-            snipe.sendChat(contest.challenger + " and " + contest.leader + " have swapped position sizes! You can't buy your way to the top in this game!");
+            var sassySwapMsg = contest.challenger + " and " + contest.leader + " have swapped position sizes!";
+            sassySwapMsg += "You can't buy your way to the top in this game!";
+            snipe.chatSend(sassySwapMsg);
             // TODO: could be dangerous to modify an array while looping over it?
             // mark the contest closed ...
             snipe.popularityContests.splice(contestIdx, 1);
         }
         else if (contest.votesForLeader.length >= 3) {
             snipe.positionSizes[contest.challenger] = 1;
-            snipe.sendChat(contest.challenger + " lost the popular vote and is punished.  Position size = 1.");
+            snipe.chatSend(contest.challenger + " lost the popular vote and is punished.  Position size = 1.");
             // mark the contest closed
             snipe.popularityContests.splice(contestIdx, 1);
         }
@@ -1166,12 +1195,12 @@ function checkForPopularityContestEnd(channel, pollMessageId) {
 }
 function freeze(msg) {
     var snipe = activeSnipes[JSON.stringify(msg.channel)];
-    snipe.sendChat("@" + msg.sender.username + "'s attempt was frozen and instead @" + snipe.freeze + "'s position increased +1");
+    snipe.chatSend("@" + msg.sender.username + "'s attempt was frozen and instead @" + snipe.freeze + "'s position increased +1");
     snipe.positionSizes[snipe.freeze] += 1;
 }
 function main() {
     return __awaiter(this, void 0, void 0, function () {
-        var channel, message, error_1;
+        var mkbotChannel, message, error_1;
         var _this = this;
         return __generator(this, function (_a) {
             switch (_a.label) {
@@ -1186,23 +1215,23 @@ function main() {
                     _a.sent();
                     console.log("Second key initialized");
                     console.log("Listening for all messages...");
-                    channel = {
+                    mkbotChannel = {
                         membersType: "team", name: "mkbot", public: false, topicName: "test3", topicType: "chat"
                     };
                     message = {
                         body: botUsername + " was just restarted...[development mode] [use at own risk] [not functional]"
                     };
-                    bot.chat.send(channel, message);
+                    bot.chat.send(mkbotChannel, message);
                     return [4 /*yield*/, loadActiveSnipes()];
                 case 3:
                     activeSnipes = _a.sent();
-                    console.log('here, the active snipes we found: ');
+                    console.log("here, the active snipes we found: ");
                     console.log(activeSnipes);
                     Object.keys(activeSnipes).forEach(function (chid) {
-                        var channel = JSON.parse(chid);
-                        activeSnipes[chid].chatSend('Croupier was restarted... Previous bets are still valid!');
-                        activeSnipes[chid].chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(channel)));
-                        launchSnipe(channel);
+                        var snipeChannel = JSON.parse(chid);
+                        activeSnipes[chid].chatSend("Croupier was restarted... Previous bets are still valid!");
+                        activeSnipes[chid].chatSend(buildBettingTable(calculatePotSize(snipeChannel), buildBettorRange(snipeChannel)));
+                        launchSnipe(snipeChannel);
                     });
                     return [4 /*yield*/, bot.chat.watchAllChannelsForNewMessages(function (msg) { return __awaiter(_this, void 0, void 0, function () {
                             var snipe;
@@ -1212,7 +1241,9 @@ function main() {
                                 }
                                 try {
                                     snipe = activeSnipes[JSON.stringify(msg.channel)];
-                                    if (typeof (snipe) !== 'undefined' && snipe.freeze && msg.sender.username !== snipe.freeze) {
+                                    if (typeof (snipe) !== "undefined" &&
+                                        snipe.freeze &&
+                                        msg.sender.username !== snipe.freeze) {
                                         freeze(msg);
                                         return [2 /*return*/];
                                     }

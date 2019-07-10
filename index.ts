@@ -28,7 +28,7 @@ sassyPopularityContestDescription += "you or the pot leader?  If the pot leader 
 sassyPopularityContestDescription += "position is reduced to 1.  If you win, you and the pot ";
 sassyPopularityContestDescription += "leader swap position sizes!";
 
-const powerups: Array<IPowerup> = [
+const powerups: Array<IPowerupAward> = [
   {
     description: `Go nuclear and play everyone's powerups in the order they were received`,
     emoji: "☢️",
@@ -87,6 +87,18 @@ const powerups: Array<IPowerup> = [
 
 import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
 
+// This interface is swiped from the keybase-bot library
+// Unfortunately, we have taken on the technical debt of using
+// an old version of keybase-bot
+
+interface IReactionContent {
+  type: "reaction";
+  reaction: {
+      m: number|string;
+      b: number|string;
+  };
+}
+
 interface IBetData {
   fees: Array<Promise<number>>;
   wagers: Array<number>;
@@ -100,7 +112,7 @@ interface IParticipant {
   username: string;
   transaction: Transaction;
   onBehalfOf?: string;
-  powerup: IPowerup;
+  powerup?: IPowerup;
 }
 
 interface IPowerup {
@@ -147,6 +159,7 @@ interface ISnipe {
   popularityContests: Array<IPopularityContest>;
   potSizeStored: number;
   clockRemaining: number;
+  freeze: string;
 }
 
 interface IPositionSize {
@@ -188,7 +201,7 @@ function updateSnipeLog(channel: ChatChannel): void {
 
 // If the same person made 3 bets in a row, issue a powerup
 // but not if they have recently been issued a powerup
-function shouldIssuePowerup(channel: ChatChannel): void {
+function shouldIssuePowerup(channel: ChatChannel): boolean {
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   const count: number = snipe.participants.length;
   if (count >= 3
@@ -236,7 +249,7 @@ function issuePowerup(channel: ChatChannel, participantIndex: number): void {
 function addSnipeParticipant(channel: ChatChannel, txn: Transaction, onBehalfOf?: string): void {
 
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-  let newParticipant: object;
+  let newParticipant: IParticipant;
   let betBeneficiary: string;
 
   if (typeof(onBehalfOf) === "undefined") {
@@ -938,39 +951,6 @@ function getChannelFromSnipeId(snipeId: number): ChatChannel {
   });
 }
 
-function flipInOurTeam(channel: ChatChannel): void {
-  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-  const teamName: string = `croupierflips.snipe${snipe.snipeId}`;
-  const subChannel: object = {
-    membersType: "team", name: teamName, public: false, topicType: "chat",
-  };
-  bot.team.createSubteam(teamName).then((result) => {
-
-    console.log("result for creating subteam", result);
-    // invite all the participants - should probably throttle this.
-    let usernamesToInvite: Array<object> = Object.keys(snipe.positionSizes).map((username) => {
-      return {
-        role: "reader",
-        username,
-      };
-    });
-    usernamesToInvite = usernamesToInvite.concat({
-      role: "admin",
-      username: "croupier",
-    });
-    bot.team.addMembers({
-      team: teamName,
-      usernames: usernamesToInvite,
-    }).then((res) => {
-      console.log("result for adding members", res);
-      bot.chat.send(subChannel, {
-        body: "/flip",
-      });
-    });
-  });
-  return snipe;
-}
-
 function getOriginChannel(channelName: string): ChatChannel {
   const channelMatch: Array<any> = channelName.match(/croupierflips.snipe(\d+)/);
   const snipeId: number = channelMatch[1];
@@ -1030,7 +1010,7 @@ function monitorFlipResults(msg: MessageSummary): void {
             msg.content.flip.gameId).then((getFlipDataRes, stdout, stderr) => {
             console.log("getflipdata res!");
             console.log(getFlipDataRes);
-            const errorInfo: object = JSON.parse(stdout).result.status.errorInfo;
+            const errorInfo: any = JSON.parse(stdout).result.status.errorInfo;
             if (errorInfo.dupreg && errorInfo.dupreg.user) {
               bot.team.removeMember({
                 team: msg.channel.name,
@@ -1203,19 +1183,13 @@ function checkReactionForPowerup(msg: MessageSummary): void {
     return;
   }
   const reactionId: string = msg.id;
-  const reaction: object = msg.content.reaction;
-
-  console.log("Checking for powerup");
-  console.log("msg.sender.username", msg.sender.username);
+  const reactionContent: IReactionContent = msg.content;
 
   snipe.participants.forEach((bet: IParticipant) => {
     if (msg.sender.username === bet.username) {
       if (bet.powerup && bet.powerup.usedAt === null) {
-        console.log("reaction.b", reaction.b);
-        console.log("bet powerup award reaction", bet.powerup.award.reaction);
-        console.log("reaction.m", reaction.m);
-        console.log("bet powerup reactionId", bet.powerup.reactionId);
-        if (reaction.b === bet.powerup.award.reaction && reaction.m === bet.powerup.reactionId) {
+        if (reactionContent.reaction.b === bet.powerup.award.reaction &&
+          reactionContent.reaction.m === bet.powerup.reactionId) {
           consumePowerup(msg.channel, bet.powerup);
         }
       }
@@ -1318,8 +1292,8 @@ function consumePowerup(channel: ChatChannel, powerup: IPowerup): void {
       bot.chat.send(channel, {
         body: sassyMessage,
       }).then((msgData) => {
-        const challengerReaction: Promise<SendResult> = bot.chat.react(channel, msgData.id, `${consumer}`);
-        const leaderReaction: Promise<SendResult> = bot.chat.react(channel, msgData.id, `${leader}`);
+        const challengerReaction: Promise<any> = bot.chat.react(channel, msgData.id, `${consumer}`);
+        const leaderReaction: Promise<any> = bot.chat.react(channel, msgData.id, `${leader}`);
         Promise.all([challengerReaction, leaderReaction]).then((values) => {
           snipe.popularityContests.push({
             challenger: consumer,
@@ -1360,15 +1334,15 @@ function checkForPopularityContestVote(msg: MessageSummary): void {
     return;
   }
   const reactionId: string = msg.id;
-  const reaction: object = msg.content.reaction;
+  const reactionContent: IReactionContent = msg.content;
   snipe.popularityContests.forEach((contest) => {
-    if (contest.pollMessageId === reaction.m) {
-      if (reaction.b === contest.leader) {
+    if (contest.pollMessageId === reactionContent.reaction.m) {
+      if (reactionContent.reaction.b === contest.leader) {
         contest.votesForLeader.push(reactionId);
-        checkForPopularityContestEnd(msg.channel, reaction.m);
-      } else if (reaction.b === contest.challenger) {
+        checkForPopularityContestEnd(msg.channel, reactionContent.reaction.m);
+      } else if (reactionContent.reaction.b === contest.challenger) {
         contest.votesForChallenger.push(reactionId);
-        checkForPopularityContestEnd(msg.channel, reaction.m);
+        checkForPopularityContestEnd(msg.channel, reactionContent.reaction.m);
       }
     }
   });
@@ -1405,7 +1379,7 @@ function checkForPopularityContestEnd(channel: ChatChannel, pollMessageId: strin
       const challengerPositionSize: number = snipe.positionSizes[contest.challenger];
       snipe.positionSizes[contest.leader] = challengerPositionSize;
       snipe.positionSizes[contest.challenger] = leaderPositionSize;
-      const sassySwapMsg: string = `${contest.challenger} and ${contest.leader} have swapped position sizes!`;
+      let sassySwapMsg: string = `${contest.challenger} and ${contest.leader} have swapped position sizes!`;
       sassySwapMsg += `You can't buy your way to the top in this game!`;
       snipe.chatSend(sassySwapMsg);
 
