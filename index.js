@@ -49,9 +49,67 @@ var botUsername = "croupier";
 var paperkey = process.env.CROUPIER_PAPERKEY_1;
 var paperkey2 = process.env.CROUPIER_PAPERKEY_2;
 var activeSnipes;
+var powerups = [
+    {
+        name: 'nuke',
+        description: "Go nuclear and play everyone's powerups in the order they were received",
+        reaction: ':radioactive_sign:',
+        emoji: '☢️'
+    },
+    {
+        name: 'freeze',
+        description: 'For the next 10 seconds, powerups and bets are worthless and increase your position by 1',
+        reaction: ':shaved_ice:',
+        emoji: '🍧'
+    },
+    {
+        name: 'the-final-countdown',
+        description: "o/` It's the final countdown!  Reset the clock to 1 minute",
+        reaction: ':man_dancing:',
+        emoji: '🕺'
+    },
+    {
+        name: 'level-the-playing-field',
+        description: "Level the playing field and reset everybody's positions to 1",
+        reaction: ':rainbow-flag:',
+        emoji: '🏳️‍🌈'
+    },
+    {
+        name: 'popularity-contest',
+        description: 'Put it to a vote: who does the group like more, you or the pot leader?  If the pot leader wins, your position is reduced to 1.  If you win, you and the pot leader swap position sizes!',
+        reaction: ':dancers:',
+        emoji: '👯'
+    },
+    {
+        name: 'half-life',
+        description: 'Cut the remaining time in half',
+        reaction: ':hourglass:',
+        emoji: '⌛'
+    },
+    {
+        name: 'double-life',
+        description: 'Double the remaining time',
+        reaction: ':hourglass_flowing_sand:',
+        emoji: '⏳'
+    },
+    {
+        name: 'assassin',
+        description: "Reduce the pot leader's position size to 1",
+        reaction: ':gun:',
+        emoji: '🔫'
+    },
+    {
+        name: 'double-edged-sword',
+        description: 'Your position size has an even chance of doubling/halving',
+        reaction: ':dagger_knife:',
+        emoji: '🗡'
+    }
+];
 function updateSnipeLog(channel) {
-    var participants = JSON.stringify(activeSnipes[JSON.stringify(channel)].participants);
-    var positionSizes = JSON.stringify(activeSnipes[JSON.stringify(channel)].positionSizes);
+    var snipe = activeSnipes[JSON.stringify(channel)];
+    var participants = JSON.stringify(snipe.participants);
+    var positionSizes = JSON.stringify(snipe.positionSizes);
+    var blinds = snipe.blinds;
     var snipeId = activeSnipes[JSON.stringify(channel)].snipeId;
     var connection = mysql.createConnection({
         database: process.env.MYSQL_DB,
@@ -60,56 +118,54 @@ function updateSnipeLog(channel) {
         user: process.env.MYSQL_USER
     });
     connection.connect();
-    connection.query("\n    UPDATE snipes SET\n    participants=" + connection.escape(participants) + ",\n    position_sizes-=" + connection.escape(positionSizes) + "\n    WHERE\n    id=" + connection.escape(snipeId), function (error, results, fields) {
+    connection.query("\n    UPDATE snipes SET\n    participants=" + connection.escape(participants) + ",\n    position_sizes=" + connection.escape(positionSizes) + ",\n    blinds=" + connection.escape(blinds) + ";\n    WHERE\n    id=" + connection.escape(snipeId), function (error, results, fields) {
         if (error) {
             console.log(error);
         }
     });
     connection.end();
 }
+// If the same person made 3 bets in a row, issue a powerup
+// but not if they have recently been issued a powerup
 function shouldIssuePowerup(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
     var count = snipe.participants.length;
     if (count >= 3
         && snipe.participants[count - 1].username === snipe.participants[count - 2].username
         && snipe.participants[count - 2].username === snipe.participants[count - 3].username) {
-        return true;
+        var lastPowerupIndex_1 = 0;
+        snipe.participants.forEach(function (participant, idx) {
+            if (participant.powerup) {
+                lastPowerupIndex_1 = idx;
+            }
+        });
+        if (((count - 1) - lastPowerupIndex_1) >= 3) {
+            return true;
+        }
+        else {
+            return false;
+        }
     }
     else {
         return false;
     }
 }
 function issuePowerup(channel, participantIndex) {
-    var powerups = [{
-            name: 'half-life',
-            description: 'Cut the remaining time in half'
-        },
-        {
-            name: 'double-life',
-            description: 'Double the remaining time'
-        },
-        {
-            name: 'assassin',
-            description: "Reduce the pot leader's position size to 1"
-        },
-        {
-            name: 'popularity-contest',
-            description: 'Put it to a vote: who does the group like more, you or the pot leader?  If the pot leader wins, your position is reduced to 1.  If you win, you and the pot leader swap position sizes!'
-        },
-        {
-            name: 'double-edged-sword',
-            description: 'Your position size has an even chance of doubling/halving'
-        }];
-    var award = _.sample(powerups);
+    // let award = _.sample(powerups);
+    var award = powerups[0];
     var snipe = activeSnipes[JSON.stringify(channel)];
     snipe.participants[participantIndex].powerup = {
         award: award,
         awardedAt: +new Date,
         usedAt: null,
-        participantIndex: participantIndex
+        participantIndex: participantIndex,
+        reactionId: null
     };
     var awardee = snipe.participants[participantIndex].username;
-    snipe.chatSend("Congrats @" + awardee + ", you won the **" + award.name + "** powerup.\n    *" + award.description + "*\n    Type \"" + award + "\" any time this snipe to activate the powerup.");
+    snipe.chatSend("Congrats @" + awardee + ", you won the **" + award.name + "** powerup.\n    *" + award.description + "*\n    Click the emoji to consume the powerup.").then(function (msg) {
+        bot.chat.react(channel, msg.id, award.reaction);
+        snipe.participants[participantIndex].powerup.reactionId = msg.id;
+    });
 }
 function addSnipeParticipant(channel, txn, onBehalfOf) {
     var snipe = activeSnipes[JSON.stringify(channel)];
@@ -152,7 +208,7 @@ function logNewSnipe(channel) {
             user: process.env.MYSQL_USER
         });
         connection.connect();
-        connection.query("INSERT INTO snipes\n      (channel, countdown)\n      VALUES\n      (" + connection.escape(JSON.stringify(channel)) + ",\n      " + connection.escape(snipe.countdown) + "\n      )", function (error, results, fields) {
+        connection.query("INSERT INTO snipes\n      (channel, countdown, betting_started)\n      VALUES\n      (" + connection.escape(JSON.stringify(channel)) + ",\n      " + connection.escape(snipe.countdown) + ",\n      " + connection.escape(snipe.betting_started) + "\n      )", function (error, results, fields) {
             if (error) {
                 console.log(error);
             }
@@ -276,33 +332,44 @@ function buildBettorRange(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
     var bettorRange = {};
     var start = 0;
-    Object.keys(snipe.positionSizes).forEach(function (username) {
+    Object.keys(snipe.positionSizes).sort(function (a, b) {
+        return snipe.positionSizes[a] > snipe.positionSizes[b] ? -1 : 1;
+    }).forEach(function (username) {
         bettorRange[username] = [start + 1, start + snipe.positionSizes[username]];
         start += snipe.positionSizes[username];
     });
     return bettorRange;
 }
+function displayFixedNice(a) {
+    var aFormatted = a.toFixed(2).toString();
+    if (aFormatted.slice(-2, aFormatted.length) === "00") {
+        aFormatted = parseInt(aFormatted, 10).toString();
+    }
+    return aFormatted;
+}
 function buildBettingTable(potSize, bettorRange) {
     console.log('within BuildBettingTable, bettorRange:', bettorRange);
     var maxValue = Math.max.apply(Math, _.flatten(Object.values(bettorRange)));
-    var bettingTable = "Pot size: " + potSize.toString() + "XLM\n";
+    var bettingTable = "Pot size: " + displayFixedNice(potSize) + "XLM\n";
+    var bettorRank = 1;
     Object.keys(bettorRange).forEach(function (username) {
         var chancePct = 100 * ((1 + (bettorRange[username][1] - bettorRange[username][0])) / maxValue);
-        bettingTable += "\n@" + username + ": `";
+        bettingTable += "\n" + bettorRank + ". @" + username + ": `";
+        bettorRank += 1;
         if (bettorRange[username][0] === bettorRange[username][1]) {
             bettingTable += bettorRange[username][0] + "`";
         }
         else {
             bettingTable += bettorRange[username][0].toLocaleString() + " - " + bettorRange[username][1].toLocaleString() + "`";
         }
-        bettingTable += " (" + chancePct + "% chance)";
+        bettingTable += " (" + displayFixedNice(chancePct) + "% chance)";
     });
     return bettingTable;
 }
 ;
 function makeSubteamForFlip(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
-    var subteamName = "codeforcash.croupier" + snipe.snipeId;
+    var subteamName = "croupierflips.snipe" + snipe.snipeId;
     var usernamesToAdd = [{ "username": "croupier", "role": "admin" }];
     Object.keys(snipe.positionSizes).forEach(function (username) {
         usernamesToAdd.push({
@@ -333,10 +400,16 @@ function flip(channel, whereToFlip) {
     var maxBet = flatBettingValues.reduce(function (a, b) { return Math.max(a, b); });
     var bettingTable = buildBettingTable(calculatePotSize(channel), bettorRange);
     bot2.chat.send(whereToFlip, {
+        body: '**Final betting table...**'
+    });
+    bot2.chat.send(whereToFlip, {
         body: bettingTable
     });
     bot2.chat.send(whereToFlip, {
         body: "/flip " + minBet + ".." + maxBet
+    }).then(function (res) {
+        var snipe = activeSnipes[JSON.stringify(channel)];
+        snipe.reflipping = false;
     });
 }
 function checkWalletBalance(username) {
@@ -365,30 +438,40 @@ function processNewBet(txn, msg) {
     var channel = msg.channel;
     var onBehalfOfMatch = msg.content.text.body.match(/(for|4):\s?@?(\w+)/i);
     var snipe = activeSnipes[JSON.stringify(channel)];
-    if (onBehalfOfMatch !== null) {
-        var onBehalfOfRecipient_1 = onBehalfOfMatch[2];
-        // check if the onBehalfOf user already has a wallet with bot.wallet.lookup(username);
-        // if not, restrict the onBehalfOf wager to >= 2.01XLM, Keybase's minimum xfer for
-        // new wallets
-        checkWalletBalance(onBehalfOfRecipient_1).then(function (balance) {
-            if (balance === null || balance < 2.01) {
-                snipe.chatSend('Betting on behalf of someone else?  Seems like they do not have a wallet yet, so your bet must be at least 2.01XLM');
-                processRefund(txn, msg.channel);
-            }
-            else {
-                addSnipeParticipant(channel, txn, onBehalfOfRecipient_1);
-                snipe.chatSend("@" + onBehalfOfRecipient_1 + " is locked into the snipe, thanks to @" + txn.fromUsername + "!");
-                bot.chat.react(channel, msg.id, ':gift:');
-            }
-        });
-    }
-    else {
-        addSnipeParticipant(channel, txn, undefined);
-        snipe.chatSend("@" + txn.fromUsername + " is locked into the snipe!");
-    }
+    return new Promise(function (resolve) {
+        if (onBehalfOfMatch !== null) {
+            var onBehalfOfRecipient_1 = onBehalfOfMatch[2];
+            // check if the onBehalfOf user already has a wallet with bot.wallet.lookup(username);
+            // if not, restrict the onBehalfOf wager to >= 2.01XLM, Keybase's minimum xfer for
+            // new wallets
+            checkWalletBalance(onBehalfOfRecipient_1).then(function (balance) {
+                if (balance === null || balance < 2.01) {
+                    snipe.chatSend('Betting on behalf of someone else?  Seems like they do not have a wallet yet, so your bet must be at least 2.01XLM');
+                    processRefund(txn, msg.channel);
+                    resolve(false);
+                }
+                else if (typeof (snipe.positionSizes[txn.fromUsername]) === 'undefined') {
+                    snipe.chatSend('You cannot bet on behalf of someone else unless you are participating as well');
+                    resolve(false);
+                }
+                else {
+                    addSnipeParticipant(channel, txn, onBehalfOfRecipient_1);
+                    snipe.chatSend("@" + onBehalfOfRecipient_1 + " is locked into the snipe, thanks to @" + txn.fromUsername + "!");
+                    bot.chat.react(channel, msg.id, ':gift:');
+                    resolve(true);
+                }
+            });
+        }
+        else {
+            addSnipeParticipant(channel, txn, undefined);
+            snipe.chatSend("@" + txn.fromUsername + " is locked into the snipe!");
+            resolve(true);
+        }
+    });
 }
 function processTxnDetails(txn, msg) {
     var channel = msg.channel;
+    var snipe = activeSnipes[JSON.stringify(channel)];
     if (txn.toUsername !== botUsername) {
         return;
     }
@@ -396,13 +479,19 @@ function processTxnDetails(txn, msg) {
     if (!isNative) {
         return;
     }
-    if (parseFloat(txn.amount) < 0.01) {
+    var blinds;
+    if (typeof (snipe) === "undefined") {
+        blinds = 0.01;
+    }
+    else {
+        blinds = snipe.blinds;
+    }
+    if (parseFloat(txn.amount) < blinds) {
         bot.chat.send(channel, {
-            body: "Thanks for the tip, but bets should be >= 0.01XLM"
+            body: "Thanks for the tip, but bets should be >= " + blinds + "XLM"
         });
         return;
     }
-    var snipe = activeSnipes[JSON.stringify(channel)];
     if (typeof (snipe) === "undefined") {
         var countdown = 60;
         var countdownMatch = msg.content.text.body.match(/countdown:\s?(\d+)/i);
@@ -419,12 +508,15 @@ function processTxnDetails(txn, msg) {
         var moneyThrottle_1 = throttledQueue(5, 5000);
         activeSnipes[JSON.stringify(channel)] = {
             betting_open: true,
+            betting_started: +new Date,
             clock: null,
             participants: [],
             timeout: null,
             countdown: countdown,
             reFlips: 3,
             positionSizes: {},
+            blinds: 0.01,
+            popularityContests: [],
             chatSend: function (message) {
                 return new Promise(function (resolve) {
                     chatThrottle_1(function () {
@@ -461,8 +553,11 @@ function processTxnDetails(txn, msg) {
             }, 1000 * 5);
             return;
         }
-        processNewBet(txn, msg);
-        resetSnipeClock(channel);
+        processNewBet(txn, msg).then(function (betProcessed) {
+            if (betProcessed) {
+                resetSnipeClock(channel);
+            }
+        });
     }
 }
 function calculatePotSize(channel) {
@@ -474,19 +569,38 @@ function calculatePotSize(channel) {
     return sum;
 }
 function getTimeLeft(snipe) {
-    return moment.duration(snipe.betting_stops.diff(moment())).asSeconds();
+    return Math.ceil(Math.abs(moment.duration(snipe.betting_stops.diff(moment())).asSeconds()));
 }
 function resetSnipeClock(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
-    snipe.chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(channel)));
-    var timeRemaining = getTimeLeft(snipe);
+    if (snipe.bettingTable) {
+        bot.chat["delete"](channel, snipe.bettingTable, {}).then(function () {
+            snipe.chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(channel))).then(function (msg) {
+                snipe.bettingTable = msg.id;
+            });
+        });
+    }
+    else {
+        snipe.chatSend(buildBettingTable(calculatePotSize(channel), buildBettorRange(channel))).then(function (msg) {
+            snipe.bettingTable = msg.id;
+        });
+    }
+    var timeRemaining = Math.ceil(getTimeLeft(snipe));
+    console.log('time remaining', timeRemaining);
     clearTimeout(snipe.timeout);
-    var boost = Math.floor(0.10 * snipe.countdown);
-    var timerEndsInSeconds = timeRemaining + boost;
+    var boost, timerEndsInSeconds;
+    if (timeRemaining <= 30) {
+        timerEndsInSeconds = 60;
+    }
+    else {
+        boost = 10;
+        timerEndsInSeconds = timeRemaining + boost;
+    }
     snipe.betting_stops = moment().add(timerEndsInSeconds, 'seconds');
     bot.chat["delete"](channel, snipe.clock, {});
     snipe.chatSend("Betting stops " + moment().to(snipe.betting_stops)).then(function (sentMessage) {
-        runClock(channel, sentMessage.id, timerEndsInSeconds);
+        console.log('just sent the parent betting stops message in resetSnipeClock');
+        console.log('sentMessage', sentMessage);
         snipe.clock = sentMessage.id;
     });
     var finalizeBetsTimeout = setTimeout(function () {
@@ -514,12 +628,15 @@ function loadActiveSnipes() {
                 var channel = JSON.parse(result.channel);
                 snipes[JSON.stringify(channel)] = {
                     snipeId: result.id,
+                    betting_started: result.betting_started,
                     betting_open: true,
                     clock: null,
                     participants: JSON.parse(result.participants),
                     timeout: null,
                     countdown: result.countdown,
                     positionSizes: JSON.parse(result.position_sizes),
+                    blinds: result.blinds,
+                    popularityContests: [],
                     chatSend: function (message) {
                         return new Promise(function (resolve) {
                             chatThrottle(function () {
@@ -550,11 +667,12 @@ function launchSnipe(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
     var message = "The snipe is on (**#" + activeSnipes[JSON.stringify(channel)].snipeId + "**).  Bet in multiples of 0.01XLM.  Betting format:";
     message += "```+0.01XLM@" + botUsername + "```";
+    message += "Minimum bet: " + snipe.blinds + "XLM";
     snipe.chatSend(message);
     snipe.betting_stops = moment().add(snipe.countdown, 'seconds');
     snipe.chatSend("Betting stops " + moment().to(snipe.betting_stops)).then(function (sentMessage) {
-        runClock(channel, sentMessage.id, snipe.countdown);
         snipe.clock = sentMessage.id;
+        runClock(channel);
     });
     var finalizeBetsTimeout = setTimeout(function () {
         finalizeBets(channel);
@@ -631,11 +749,12 @@ function getChannelFromSnipeId(snipeId) {
 }
 function flipInOurTeam(channel) {
     var snipe = activeSnipes[JSON.stringify(channel)];
-    var teamName = "codeforcash.croupier" + snipe.snipeId;
+    var teamName = "croupierflips.snipe" + snipe.snipeId;
     var subChannel = {
         membersType: "team", name: teamName, public: false, topicType: "chat"
     };
-    bot.team.createSubteam(teamName).then(function () {
+    bot.team.createSubteam(teamName).then(function (result) {
+        console.log('result for creating subteam', result);
         // invite all the participants - should probably throttle this.
         var usernamesToInvite = Object.keys(snipe.positionSizes).map(function (username) {
             return {
@@ -643,25 +762,31 @@ function flipInOurTeam(channel) {
                 "role": "reader"
             };
         });
+        usernamesToInvite = usernamesToInvite.concat({
+            "username": "croupier",
+            "role": "admin"
+        });
         bot.team.addMembers({
             "team": teamName,
             "usernames": usernamesToInvite
-        });
-        bot.chat.send(subChannel, {
-            body: '/flip'
+        }).then(function (res) {
+            console.log('result for adding members', res);
+            bot.chat.send(subChannel, {
+                body: '/flip'
+            });
         });
     });
     return snipe;
 }
 function getOriginChannel(channelName) {
-    var channelMatch = channelName.match(/codeforcash.croupier(\d+)/);
+    var channelMatch = channelName.match(/croupierflips.snipe(\d+)/);
     var snipeId = channelMatch[1];
     return getChannelFromSnipeId(snipeId);
 }
 var flipMonitorIntervals = {};
 function monitorFlipResults(msg) {
     var snipe, ourChannel;
-    var channelMatch = msg.channel.name.match(/codeforcash.croupier(\d+)/);
+    var channelMatch = msg.channel.name.match(/croupierflips.snipe(\d+)/);
     if (channelMatch === null) {
         snipe = activeSnipes[JSON.stringify(msg.channel)];
         ourChannel = false;
@@ -686,6 +811,10 @@ function monitorFlipResults(msg) {
                     console.log("results are NOT in", flipDetails);
                 }
             })["catch"](function (err) {
+                if (snipe.reflipping) {
+                    return false;
+                }
+                snipe.reflipping = true;
                 if (ourChannel) {
                     // extract the name of the offender
                     // remove the offender from the team
@@ -713,7 +842,7 @@ function monitorFlipResults(msg) {
                 }
                 else {
                     snipe.chatSend('Due to error, we are going to re-cast the flip in a separate subteam over which we have governance and can kick anyone with a duplicate registration.');
-                    var teamName = "codeforcash.croupier" + snipe.snipeId;
+                    var teamName = "croupierflips.snipe" + snipe.snipeId;
                     var subChannel = {
                         membersType: "team", name: teamName, public: false, topicType: "chat"
                     };
@@ -727,10 +856,31 @@ function monitorFlipResults(msg) {
         }
     }), 1000);
 }
-var runningClocks = {};
-function runClock(channel, messageId, seconds) {
+function adjustBlinds(channel) {
+    var now = +new Date;
     var snipe = activeSnipes[JSON.stringify(channel)];
+    var secondsElapsed = Math.floor((now - snipe.betting_started) / 1000);
+    var minutesElapsed = Math.floor(secondsElapsed / 60.0);
+    var blinds;
+    if (minutesElapsed < 10) {
+        blinds = 0.01;
+    }
+    else {
+        blinds = 0.01 * Math.pow(2, Math.floor((minutesElapsed - 10) / 5));
+    }
+    if (blinds !== snipe.blinds) {
+        snipe.blinds = blinds;
+        updateSnipeLog(channel);
+        snipe.chatSend("Blinds are raised to **" + blinds + "**");
+    }
+}
+var runningClocks = {};
+function runClock(channel) {
+    var snipe = activeSnipes[JSON.stringify(channel)];
+    var seconds = getTimeLeft(snipe);
+    console.log("according to runClock, the timeLeft is " + seconds);
     try {
+        adjustBlinds(channel);
         // :hourglass: :hourglass_flowing_sand:
         if (seconds % 5 === 0) {
             var hourglass = void 0;
@@ -745,7 +895,8 @@ function runClock(channel, messageId, seconds) {
             if (seconds < 55) {
                 stops_when = "in " + seconds + " seconds";
             }
-            bot.chat.edit(channel, messageId, {
+            console.log("attempting to edit message " + snipe.clock + " in channel " + channel);
+            bot.chat.edit(channel, snipe.clock, {
                 message: {
                     body: hourglass + (" betting stops " + stops_when)
                 }
@@ -757,26 +908,95 @@ function runClock(channel, messageId, seconds) {
         }
     }
     catch (e) {
+        console.log('ran into error in runClock fxn, ', e);
         return;
     }
     if (seconds > 1) {
         setTimeout(function () {
-            runClock(channel, messageId, seconds - 1);
+            runClock(channel);
         }, 1000);
     }
     else {
         setTimeout(function () {
-            bot.chat["delete"](channel, messageId, {});
+            bot.chat["delete"](channel, snipe.clock, {});
         }, 1000);
     }
 }
-function checkForPowerup(msg) {
+function buildPowerupsTable(channel, whose) {
+    var table = '';
+    var snipe = activeSnipes[JSON.stringify(channel)];
+    var powerupsCount = {};
+    snipe.participants.forEach(function (bet) {
+        if (bet.powerup && bet.powerup.usedAt === null && bet.username === whose) {
+            var award = JSON.stringify(bet.powerup.award);
+            if (typeof (powerupsCount[award]) === 'undefined') {
+                powerupsCount[award] = 0;
+            }
+            powerupsCount[award] += 1;
+        }
+    });
+    Object.keys(powerupsCount).forEach(function (awardJsonified) {
+        var award = JSON.parse(awardJsonified);
+        table += powerupsCount[awardJsonified] + "x " + award.emoji + " **" + award.name + "**: " + award.description + "\n";
+    });
+    return table;
+}
+function checkTextForPowerup(msg) {
     var snipe = activeSnipes[JSON.stringify(msg.channel)];
+    if (typeof (snipe) === 'undefined') {
+        return;
+    }
+    var powerupsQuery = msg.content.text.body.match(/(.powerups|🐶)\s?@?(\w+)?/);
+    if (powerupsQuery !== null) {
+        if (typeof (powerupsQuery[2]) !== 'undefined') {
+            var whose = powerupsQuery[1];
+            if (snipe.positionSizes[whose] > 10) {
+                snipe.positionSizes[whose] -= 10;
+                var str = buildPowerupsTable(msg.channel, whose);
+                snipe.sendChat(str + "\nIt cost @" + msg.sender.username + " 10 position to scope @" + whose + " powerups");
+            }
+        }
+        else {
+            var whose = msg.sender.username;
+            if (snipe.positionSizes[whose] > 1) {
+                snipe.positionSizes[whose] -= 1;
+                var str = buildPowerupsTable(msg.channel, whose);
+                snipe.sendChat(str + "\nIt cost @" + whose + " 1 position to check their own powerups");
+            }
+        }
+        return;
+    }
+    else {
+        snipe.participants.forEach(function (bet) {
+            if (msg.sender.username === bet.username) {
+                if (bet.powerup && bet.powerup.usedAt === null) {
+                    if (msg.content.text.body.toLowerCase().indexOf(bet.powerup.award.reaction) !== -1
+                        || msg.content.text.body.indexOf(bet.powerup.award.emoji) !== -1) {
+                        consumePowerup(msg.channel, bet.powerup);
+                    }
+                }
+            }
+        });
+    }
+}
+;
+function checkReactionForPowerup(msg) {
+    var snipe = activeSnipes[JSON.stringify(msg.channel)];
+    if (typeof (snipe) === 'undefined') {
+        return;
+    }
+    var reactionId = msg.id;
+    var reaction = msg.content.reaction;
+    console.log('Checking for powerup');
+    console.log('msg.sender.username', msg.sender.username);
     snipe.participants.forEach(function (bet) {
         if (msg.sender.username === bet.username) {
             if (bet.powerup && bet.powerup.usedAt === null) {
-                var powerupRegex = new RegExp(bet.powerup.award.name, "i");
-                if (powerupRegex.test(msg.content.text.body)) {
+                console.log('reaction.b', reaction.b);
+                console.log('bet powerup award reaction', bet.powerup.award.reaction);
+                console.log('reaction.m', reaction.m);
+                console.log('bet powerup reactionId', bet.powerup.reactionId);
+                if (reaction.b === bet.powerup.award.reaction && reaction.m === bet.powerup.reactionId) {
                     consumePowerup(msg.channel, bet.powerup);
                 }
             }
@@ -794,25 +1014,62 @@ function consumePowerup(channel, powerup) {
     var leader = findPotLead(channel);
     powerup.usedAt = +new Date;
     switch (powerup.award.name) {
+        case 'nuke':
+            var unusedPowerups = snipe.participants.filter(function (p) { return p.powerup && typeof (p.powerup.usedAt) === 'undefined'; });
+            snipe.sendChat("@" + consumer + " went nuclear.  Enjoy the show :fireworks:.");
+            if (unusedPowerups.length === 0) {
+                snipe.sendChat("...well, that was awkward. All that nuclear FUD, and for what?");
+            }
+            snipe.participants.forEach(function (participant) {
+                if (participant.powerup) {
+                    var powerup_1 = participant.powerup;
+                    if (typeof (powerup_1.usedAt) === 'undefined') {
+                        consumePowerup(getChannelFromSnipeId(snipe.snipeId), powerup_1);
+                    }
+                }
+            });
+            break;
+        case 'freeze':
+            snipe.sendChat("@" + consumer + " played Freeze.  Any action by anyone other than " + consumer + " or @croupier during the next 10 seconds will be ignored and instead increase " + consumer + "'s position by 1.");
+            snipe.freeze = consumer;
+            setTimeout(function () {
+                snipe.sendChat("@" + consumer + "'s freeze has expired!");
+                snipe.freeze = undefined;
+            }, 1000 * 10);
+            break;
+        case 'the-final-countdown':
+            snipe.betting_stops = moment().add(60, 'seconds');
+            snipe.sendChat("@" + consumer + " played The Final Countdown.  Will things ever be the same again?  60 seconds on the clock.   It's the final countdown.");
+            break;
+        case 'level-the-playing-field':
+            Object.keys(snipe.positionSizes).forEach(function (username) {
+                snipe.positionSizes[username] = 1;
+            });
+            snipe.sendChat("@" + consumer + " leveled the playing field in a big way.  Everyone's positions are now equal.  One love.");
+            break;
         case 'half-life': // Cut the remaining time in half
-            snipe.countdown = Math.floor(snipe.countdown / 2.0);
+            var timeToSubtract = Math.floor(getTimeLeft(snipe) / 2.0);
+            snipe.betting_stops = snipe.betting_stops.subtract(timeToSubtract, 'seconds');
+            snipe.sendChat("@" + consumer + " chopped " + timeToSubtract + " seconds off the clock.");
             break;
         case 'double-life': // Double the remaining time
-            snipe.countdown = Math.floor(snipe.countdown * 2.0);
+            var timeToAdd = Math.floor(getTimeLeft(snipe));
+            snipe.betting_stops = snipe.betting_stops.add(timeToAdd, 'seconds');
+            snipe.sendChat("@" + consumer + " added " + timeToAdd + " seconds to the clock.");
             break;
-        case 'assassin': // Reduce the pot leader's position size to 0.01XLM
+        case 'assassin': // Reduce the pot leader's position size to 1
             snipe.positionSizes[leader] = 1;
-            snipe.chatSend("The :dagger_knife: went into " + leader + " and their position size is now 1.");
+            snipe.chatSend("@" + consumer + "'s :gun: seriously injured @" + leader + " and their position size is now 1.");
             break;
-        case 'popularity-contest': // Put it to a vote: who does the group like more, you or the pot leader?  If the pot leader wins, your position is reduced to 0.01.  If you win, you and the pot leader swap position sizes!
+        case 'popularity-contest': // Put it to a vote: who does the group like more, you or the pot leader?  If the pot leader wins, your position is reduced to 1.  If you win, you and the pot leader swap position sizes!
             if (consumer === leader) {
                 snipe.chatSend("You cannot challenge yourself in this game. ::powerup fizzles::");
                 return;
             }
             bot.chat.send(channel, {
-                body: "It's a popularity contest!  Whom do you prefer?  First to 3 votes wins!"
+                body: "@" + consumer + " called a popularity contest to challenge @" + leader + "'s throne!  Whom do you prefer?  First to 3 votes wins (4 votes including the initial reaction seeded by me the Croupier)!"
             }).then(function (msgData) {
-                var challengerReaction = bot.chat.react(channel, msgData.id, '${consumer}');
+                var challengerReaction = bot.chat.react(channel, msgData.id, "" + consumer);
                 var leaderReaction = bot.chat.react(channel, msgData.id, "" + leader);
                 Promise.all([challengerReaction, leaderReaction]).then(function (values) {
                     snipe.popularityContests.push({
@@ -828,11 +1085,11 @@ function consumePowerup(channel, powerup) {
         case 'double-edged-sword': // Even chance of halving or doubling one's position size
             if (Math.random() >= 0.5) {
                 snipe.positionSizes[consumer] = 2 * snipe.positionSizes[consumer];
-                snipe.chatSend("A favorable day!  " + consumer + "'s position size has doubled to " + snipe.positionSizes[consumer]);
+                snipe.chatSend("A favorable day!  @" + consumer + "'s position size has doubled to " + snipe.positionSizes[consumer]);
             }
             else {
                 snipe.positionSizes[consumer] = Math.ceil(snipe.positionSizes[consumer] / 2);
-                snipe.chatSend("Ouch! " + consumer + " cut their hand on the double edged sword and is now dealing with " + snipe.positionSizes[consumer] + ".");
+                snipe.chatSend("Ouch! @" + consumer + " cut their hand on the double edged sword and is now dealing with " + snipe.positionSizes[consumer] + ".");
             }
             break;
         default:
@@ -844,6 +1101,9 @@ function consumePowerup(channel, powerup) {
 }
 function checkForPopularityContestVote(msg) {
     var snipe = activeSnipes[JSON.stringify(msg.channel)];
+    if (typeof (snipe) === 'undefined' || typeof (snipe.popularityContests) === 'undefined') {
+        return;
+    }
     var reactionId = msg.id;
     var reaction = msg.content.reaction;
     snipe.popularityContests.forEach(function (contest) {
@@ -899,6 +1159,11 @@ function checkForPopularityContestEnd(channel, pollMessageId) {
         }
     });
 }
+function freeze(msg) {
+    var snipe = activeSnipes[JSON.stringify(msg.channel)];
+    snipe.sendChat("@" + msg.sender.username + "'s attempt was frozen and instead @" + snipe.freeze + "'s position increased +1");
+    snipe.positionSizes[snipe.freeze] += 1;
+}
 function main() {
     return __awaiter(this, void 0, void 0, function () {
         var channel, message, error_1;
@@ -935,23 +1200,30 @@ function main() {
                         launchSnipe(channel);
                     });
                     return [4 /*yield*/, bot.chat.watchAllChannelsForNewMessages(function (msg) { return __awaiter(_this, void 0, void 0, function () {
+                            var snipe;
                             return __generator(this, function (_a) {
                                 if (msg.channel.topicName !== "test3") {
                                     return [2 /*return*/];
                                 }
                                 try {
+                                    snipe = activeSnipes[JSON.stringify(msg.channel)];
+                                    if (typeof (snipe) !== 'undefined' && snipe.freeze && msg.sender.username !== snipe.freeze) {
+                                        freeze(msg);
+                                        return [2 /*return*/];
+                                    }
                                     if (msg.content.type === "flip" && msg.sender.username === botUsername) {
                                         monitorFlipResults(msg);
                                         return [2 /*return*/];
                                     }
+                                    if (msg.content.type === "text" && msg.content.text.body) {
+                                        checkTextForPowerup(msg);
+                                    }
                                     if (msg.content.type === "text" && msg.content.text.payments && msg.content.text.payments.length === 1) {
                                         extractTxn(msg);
                                     }
-                                    if (msg.content.type === "text") {
-                                        checkForPowerup(msg);
-                                    }
                                     if (msg.content.type === "reaction") {
                                         checkForPopularityContestVote(msg);
+                                        checkReactionForPowerup(msg);
                                     }
                                     if (msg.content.type === "delete") {
                                         checkForPopularityContestVoteRemoval(msg);

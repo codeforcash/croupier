@@ -1201,13 +1201,13 @@ function buildPowerupsTable(channel: ChatChannel, whose: string): string {
     if (bet.powerup && bet.powerup.usedAt === null && bet.username === whose) {
       let award = JSON.stringify(bet.powerup.award);
       if(typeof(powerupsCount[award]) === 'undefined') {
-        powersCount[award] = 0;
+        powerupsCount[award] = 0;
       }
       powerupsCount[award] += 1;
     }
   });
 
-  powerupsCount.foreach((awardJsonified) => {
+  Object.keys(powerupsCount).forEach((awardJsonified) => {
     let award = JSON.parse(awardJsonified);
     table += `${powerupsCount[awardJsonified]}x ${award.emoji} **${award.name}**: ${award.description}\n`;
   });
@@ -1225,16 +1225,19 @@ function checkTextForPowerup(msg: MessageSummary) {
   if (powerupsQuery!==null) {
     if (typeof(powerupsQuery[2]) !== 'undefined') {
       let whose = powerupsQuery[1];
-      if (positionSizes[whose] > 10) {
-        positionSizes[whose] -= 10;
+      if (snipe.positionSizes[whose] > 10) {
+        snipe.positionSizes[whose] -= 10;
         let str = buildPowerupsTable(msg.channel, whose);
         snipe.sendChat(`${str}\nIt cost @${msg.sender.username} 10 position to scope @${whose} powerups`);
       }
     }
     else {
       let whose = msg.sender.username;
-      let str = buildPowerupsTable(msg.channel, whose);
-      snipe.sendChat(`${str}\nIt cost @${whose} 1 position to check their own powerups`);
+      if (snipe.positionSizes[whose] > 1) {
+        snipe.positionSizes[whose] -= 1;
+        let str = buildPowerupsTable(msg.channel, whose);
+        snipe.sendChat(`${str}\nIt cost @${whose} 1 position to check their own powerups`);
+      }
     }
     return;
   }
@@ -1329,8 +1332,8 @@ function consumePowerup(channel: ChatChannel, powerup: IPowerup) {
       snipe.sendChat(`@${consumer} leveled the playing field in a big way.  Everyone's positions are now equal.  One love.`);
       break;
     case 'half-life':  // Cut the remaining time in half
-      let timeToSubstract: number = Math.floor(getTimeLeft(snipe) / 2.0);
-      snipe.betting_stops = snipe.betting_stops.subtract(timeToSubstract, 'seconds');
+      let timeToSubtract: number = Math.floor(getTimeLeft(snipe) / 2.0);
+      snipe.betting_stops = snipe.betting_stops.subtract(timeToSubtract, 'seconds');
       snipe.sendChat(`@${consumer} chopped ${timeToSubtract} seconds off the clock.`);
       break;
     case 'double-life': // Double the remaining time
