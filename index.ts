@@ -215,6 +215,10 @@ function shouldIssuePowerup(channel: ChatChannel): boolean {
         lastPowerupIndex = idx;
       }
     });
+
+    if(lastPowerupIndex === 0) {
+      return true;
+    }
     if (((count - 1) - lastPowerupIndex) >= 3) {
       return true;
     } else {
@@ -770,11 +774,7 @@ function resetSnipeClock(channel: ChatChannel): void {
   snipe.betting_stops = moment().add(timerEndsInSeconds, "seconds");
 
   bot.chat.delete(channel, snipe.clock, {});
-  snipe.chatSend(`+Betting stops ${moment().to(snipe.betting_stops)}`).then((sentMessage) => {
-    console.log("just sent the parent betting stops message in resetSnipeClock");
-    console.log("sentMessage", sentMessage);
-    snipe.clock = sentMessage.id;
-  });
+
   const finalizeBetsTimeout: NodeJS.Timeout = setTimeout(() => {
     finalizeBets(channel);
   }, timerEndsInSeconds * 1000);
@@ -807,6 +807,7 @@ function loadActiveSnipes(): object {
         snipes[JSON.stringify(channel)] = {
           betting_open: true,
           betting_started: parseInt(result.betting_started, 10),
+          betting_stops: moment().add(result.countdown, "seconds"),
           blinds: parseFloat(result.blinds),
           chatSend: (message) => {
             return new Promise((resolveChatThrottle) => {
@@ -850,17 +851,11 @@ function launchSnipe(channel: ChatChannel): void {
   let message: string = `The snipe is on (**#${activeSnipes[JSON.stringify(channel)].snipeId}**).  `;
   message += `Bet in multiples of 0.01XLM.  Betting format:`;
   message += `\`\`\`+0.01XLM@${botUsername}\`\`\``;
-  message += `Minimum bet: ${displayFixedNice(snipe.blinds)}XLM`;
+  message += `Minimum bet: **${displayFixedNice(snipe.blinds)}XLM**`;
 
   snipe.chatSend(message);
 
-  if (snipe.clockRemaining === null) {
-    snipe.betting_stops = moment().add(snipe.countdown, "seconds");
-  } else {
-    snipe.betting_stops = moment().add(snipe.clockRemaining, "seconds");
-  }
-
-  snipe.chatSend(`-Betting stops ${moment().to(snipe.betting_stops)}`).then((sentMessage) => {
+  snipe.chatSend(`Betting stops ${moment().to(snipe.betting_stops)}`).then((sentMessage) => {
     snipe.clock = sentMessage.id;
     runClock(channel);
   });
@@ -944,11 +939,19 @@ function cancelFlip(conversationId: string, channel: ChatChannel, err: Error): v
 }
 
 function getChannelFromSnipeId(snipeId: number): ChatChannel {
-  Object.keys(activeSnipes).forEach((stringifiedChannel) => {
-    if (activeSnipes[stringifiedChannel].snipeId === snipeId) {
-      return JSON.parse(stringifiedChannel);
-    }
-  });
+  let channel: ChatChannel;
+  const BreakException = {};
+  try {
+    Object.keys(activeSnipes).forEach((stringifiedChannel) => {
+      if (activeSnipes[stringifiedChannel].snipeId === snipeId) {
+        channel = JSON.parse(stringifiedChannel);
+        throw BreakException;
+      }
+    });
+  } catch(e) {
+    // all good
+  }
+  return channel;
 }
 
 function getOriginChannel(channelName: string): ChatChannel {
@@ -1060,7 +1063,7 @@ function adjustBlinds(channel: ChatChannel): void {
   if (blinds !== snipe.blinds) {
     snipe.blinds = blinds;
     updateSnipeLog(channel);
-    snipe.chatSend(`Blinds are raised to **${displayFixedNice(blinds)}XLM**`);
+    snipe.chatSend(`Blinds are raised. Minimum bet: **${displayFixedNice(blinds)}XLM**`);
   }
 }
 
@@ -1089,15 +1092,26 @@ function runClock(channel: ChatChannel): void {
         stopsWhen = `in ${seconds} seconds`;
       }
       console.log(`attempting to edit message ${snipe.clock} in channel ${channel}`);
-      bot.chat.edit(channel, snipe.clock, {
-        message: {
+      if (snipe.clock === null || typeof(snipe.clock) === 'undefined') {
+        bot.chat.send(channel, {
           body: hourglass + ` betting stops ${stopsWhen}`,
-        },
-      }).then((res) => {
-        console.log(res);
-      }).catch((e) => {
-        console.log(e);
-      });
+        }).then((sentMessage) => {
+          snipe.clock = sentMessage.id;
+        }).catch((e) => {
+          console.log(e);
+        });
+      } else {
+        bot.chat.edit(channel, snipe.clock, {
+          message: {
+            body: hourglass + ` betting stops ${stopsWhen}`,
+          },
+        }).then((res) => {
+          console.log(res);
+        }).catch((e) => {
+          console.log(e);
+        });
+      }
+
     }
   } catch (e) {
     console.log("ran into error in runClock fxn, ", e);
@@ -1234,7 +1248,6 @@ function consumePowerup(channel: ChatChannel, powerup: IPowerup): void {
       });
       break;
     case "freeze":
-
       sassyMessage = `@${consumer} played Freeze.  `;
       sassyMessage += `Any action by anyone other than ${consumer} or @croupier during `;
       sassyMessage += `the next 10 seconds will be ignored and instead increase ${consumer}'s `;
@@ -1379,7 +1392,7 @@ function checkForPopularityContestEnd(channel: ChatChannel, pollMessageId: strin
       const challengerPositionSize: number = snipe.positionSizes[contest.challenger];
       snipe.positionSizes[contest.leader] = challengerPositionSize;
       snipe.positionSizes[contest.challenger] = leaderPositionSize;
-      let sassySwapMsg: string = `${contest.challenger} and ${contest.leader} have swapped position sizes!`;
+      let sassySwapMsg: string = `@${contest.challenger} and @${contest.leader} have swapped position sizes!`;
       sassySwapMsg += `You can't buy your way to the top in this game!`;
       snipe.chatSend(sassySwapMsg);
 
@@ -1388,7 +1401,7 @@ function checkForPopularityContestEnd(channel: ChatChannel, pollMessageId: strin
       snipe.popularityContests.splice(contestIdx, 1);
     } else if (contest.votesForLeader.length >= 3) {
       snipe.positionSizes[contest.challenger] = 1;
-      snipe.chatSend(`${contest.challenger} lost the popular vote and is punished.  Position size = 1.`);
+      snipe.chatSend(`@${contest.challenger} lost the popular vote and is punished.  Position size = 1.`);
       // mark the contest closed
       snipe.popularityContests.splice(contestIdx, 1);
     }
@@ -1420,6 +1433,7 @@ async function main(): Promise<any> {
     bot.chat.send(mkbotChannel, message);
 
     activeSnipes = await loadActiveSnipes();
+
 
     console.log("here, the active snipes we found: ");
     console.log(activeSnipes);

@@ -17,77 +17,84 @@ const botUsername: string = "croupier";
 const paperkey: string = process.env.CROUPIER_PAPERKEY_1;
 
 
+function makeSubteamForFlip(): void {
+
+  const subteamName: string = `croupierflips.snipeZBTEST`;
+
+  const usernamesToAdd: Array<object> = [{username: "croupier", role: "admin"}];
+
+  usernamesToAdd.push({
+    role: "reader",
+    username: 'zackburt',
+  });
+
+  bot.team.createSubteam(subteamName).then((res) => {
+
+    console.log('Subteam creation was successful', res);
+    bot.team.addMembers({
+      team: subteamName,
+      usernames: usernamesToAdd,
+    }).then((addMembersRes) => {
+      const newSubteam: any = {
+        membersType: "team", name: subteamName,
+      };
+      bot.chat.send(newSubteam, {
+        body: 'hello '
+      });
+    });
+  });
+
+}
+
 async function main() {
 
   await bot.init(botUsername, paperkey);
 	console.log('initialized.');
+  makeSubteamForFlip();
+
+
+  // await bot.chat.watchAllChannelsForNewMessages(
+  //   async (msg) => {
+  //     try {
+  //       console.log(msg);
+  //       if (msg.content.type === "flip") {
+
+
+  //         setTimeout(() => {
+  //           monitorFlip(msg);
+
+  //           console.log(
+  //           {
+  //             conversationId: msg.conversationId,
+  //             flipConvId: msg.content.flip.flipConvId,
+  //             msgId: msg.id,
+  //             gameId: msg.content.flip.gameId,
+  //           }
+  //           );
+
+  //           bot.chat.getFlipData(msg.conversationId,
+  //             msg.content.flip.flipConvId,
+  //             msg.id,
+  //             msg.content.flip.gameId).then((res, stdout, stderr) => {
+  //             console.log('getflipdata res!');
+  //             console.log(res);
+  //             console.log('stdout', stdout);
+  //             console.log('stderr', stderr);
+  //           });
+
+
+  //          }, 1000 * 60);
 
 
 
-
-function monitorFlip(msg) {
-  try {
-    bot.chat.loadFlip(
-      msg.conversationId,
-      msg.content.flip.flipConvId,
-      msg.id,
-      msg.content.flip.gameId,
-    ).then((flipDetails) => {
-      console.log('flip details', flipDetails);
-    }).catch((err) => {
-      console.log('err', err);
-    });
-  } catch (err) {
-    console.log('err', err);
-  }
-
-
-}
-
-
-
-  await bot.chat.watchAllChannelsForNewMessages(
-    async (msg) => {
-      try {
-        console.log(msg);
-        if (msg.content.type === "flip") {
-
-
-          setTimeout(() => {
-            monitorFlip(msg);
-
-            console.log(
-            {
-              conversationId: msg.conversationId,
-              flipConvId: msg.content.flip.flipConvId,
-              msgId: msg.id,
-              gameId: msg.content.flip.gameId,
-            }
-            );
-
-            bot.chat.getFlipData(msg.conversationId,
-              msg.content.flip.flipConvId,
-              msg.id,
-              msg.content.flip.gameId).then((res, stdout, stderr) => {
-              console.log('getflipdata res!');
-              console.log(res);
-              console.log('stdout', stdout);
-              console.log('stderr', stderr);
-            });
-
-
-           }, 1000 * 60);
-
-
-
-          return;
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    },
-    (e) => console.error(e),
-  );
+  //         return;
+  //       }
+  //     } catch (err) {
+  //       console.error(err);
+  //     }
+  //   },
+  //   (e) => console.error(e),
+  // );
 }
 
 main();
@@ -117,3 +124,22 @@ main();
   //   });
   // })
 
+
+// function monitorFlip(msg) {
+//   try {
+//     bot.chat.loadFlip(
+//       msg.conversationId,
+//       msg.content.flip.flipConvId,
+//       msg.id,
+//       msg.content.flip.gameId,
+//     ).then((flipDetails) => {
+//       console.log('flip details', flipDetails);
+//     }).catch((err) => {
+//       console.log('err', err);
+//     });
+//   } catch (err) {
+//     console.log('err', err);
+//   }
+
+
+// }
