@@ -50,51 +50,21 @@ async function main() {
 
   await bot.init(botUsername, paperkey);
 	console.log('initialized.');
-  makeSubteamForFlip();
 
 
-  // await bot.chat.watchAllChannelsForNewMessages(
-  //   async (msg) => {
-  //     try {
-  //       console.log(msg);
-  //       if (msg.content.type === "flip") {
-
-
-  //         setTimeout(() => {
-  //           monitorFlip(msg);
-
-  //           console.log(
-  //           {
-  //             conversationId: msg.conversationId,
-  //             flipConvId: msg.content.flip.flipConvId,
-  //             msgId: msg.id,
-  //             gameId: msg.content.flip.gameId,
-  //           }
-  //           );
-
-  //           bot.chat.getFlipData(msg.conversationId,
-  //             msg.content.flip.flipConvId,
-  //             msg.id,
-  //             msg.content.flip.gameId).then((res, stdout, stderr) => {
-  //             console.log('getflipdata res!');
-  //             console.log(res);
-  //             console.log('stdout', stdout);
-  //             console.log('stderr', stderr);
-  //           });
-
-
-  //          }, 1000 * 60);
-
-
-
-  //         return;
-  //       }
-  //     } catch (err) {
-  //       console.error(err);
-  //     }
-  //   },
-  //   (e) => console.error(e),
-  // );
+  await bot.chat.watchAllChannelsForNewMessages(
+    async (msg) => {
+      try {
+        console.log(msg);
+        if (msg.content.type === "flip") {
+          return;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    },
+    (e) => console.error(e),
+  );
 }
 
 main();

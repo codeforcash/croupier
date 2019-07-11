@@ -510,25 +510,34 @@ function buildBettingTable(potSize: number, bettorRange: object): string {
 }
 
 function makeSubteamForFlip(channel: ChatChannel): void {
-
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
   const subteamName: string = `croupierflips.snipe${snipe.snipeId}`;
-
   const usernamesToAdd: Array<object> = [{username: "croupier", role: "admin"}];
+
   Object.keys(snipe.positionSizes).forEach((username) => {
     usernamesToAdd.push({
       role: "reader",
       username,
     });
   });
+
+  console.log("Creating the subteam", subteamName);
+
+  const newSubteam: ChatChannel = {
+    membersType: "team", name: subteamName,
+  };
+
   bot.team.createSubteam(subteamName).then((res) => {
+    console.log("Subteam creation complete!", res);
+    console.log("Attempting to add people to the team", usernamesToAdd);
     bot.team.addMembers({
       team: subteamName,
       usernames: usernamesToAdd,
     }).then((addMembersRes) => {
-      const newSubteam: ChatChannel = {
-        membersType: "team", name: subteamName,
-      };
+      console.log("Adding people to the team was successful!", addMembersRes);
+      flip(channel, newSubteam);
+    }).catch((e) => {
+      console.log(e);
       flip(channel, newSubteam);
     });
   });
@@ -589,7 +598,7 @@ function checkWalletBalance(username: string): Promise<any> {
 function processNewBet(txn: Transaction, msg: MessageSummary): Promise<boolean> {
 
   const channel: ChatChannel = msg.channel;
-  const onBehalfOfMatch: Array<any> = msg.content.text.body.match(/(for|4):\s?@?(\w+)/i);
+  const onBehalfOfMatch: Array<any> = msg.content.text.body.match(/(for|4):?\s?@?(\w+)/i);
   const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
 
   return new Promise((resolve) => {
@@ -1033,12 +1042,8 @@ function monitorFlipResults(msg: MessageSummary): void {
           flipErrorMessage += "separate subteam over which we have governance and can kick anyone ";
           flipErrorMessage += "with a duplicate registration.";
           snipe.chatSend(flipErrorMessage);
-          const teamName: string = `croupierflips.snipe${snipe.snipeId}`;
-          const subChannel: object = {
-            membersType: "team", name: teamName, public: false, topicType: "chat",
-          };
-          flip(msg.channel, subChannel);
           clearInterval(flipMonitorIntervals[msg.conversationId]);
+          makeSubteamForFlip(msg.channel);
         }
       });
     } catch (err) {
@@ -1108,6 +1113,7 @@ function runClock(channel: ChatChannel): void {
         }).then((res) => {
           console.log(res);
         }).catch((e) => {
+          snipe.clock = null;
           console.log(e);
         });
       }
@@ -1150,6 +1156,9 @@ function buildPowerupsTable(channel: ChatChannel, whose: string): string {
     const award: IPowerupAward = JSON.parse(awardJsonified);
     table += `${powerupsCount[awardJsonified]}x ${award.reaction} **${award.name}**: ${award.description}\n`;
   });
+  if (table === "") {
+    table = `@${whose} has no powerups :disappointed:\n`
+  }
   return table;
 }
 
@@ -1219,126 +1228,12 @@ function findPotLead(channel: ChatChannel): string {
   });
 }
 
-function consumePowerup(channel: ChatChannel, powerup: IPowerup): void {
+function consumePowerup(channel: ChatChannel, powerup: IPowerup): Promise<any> {
 
-  let sassyMessage: string;
-  const snipe: ISnipe = activeSnipes[JSON.stringify(channel)];
-  const consumer: string = snipe.participants[powerup.participantIndex].username;
-  const leader: string = findPotLead(channel);
-  powerup.usedAt = +new Date();
-  let doNotResetClock: boolean = false;
-  switch (powerup.award.name) {
-    case "nuke":
-      const unusedPowerupsLength: number = snipe.participants.filter((p) => {
-        return p.powerup && typeof(p.powerup.usedAt) === "undefined";
-      }).length;
+  return new Promise((resolve) => {
 
-      snipe.chatSend(`@${consumer} went nuclear.  Enjoy the show :fireworks:.`).then(() => {
-        if (unusedPowerupsLength === 0) {
-          snipe.chatSend(`...well, that was awkward. All that nuclear FUD, and for what?`);
-        }
-      });
+  });
 
-      snipe.participants.forEach((participant) => {
-        if (participant.powerup) {
-          if (participant.powerup.usedAt === null) {
-            consumePowerup(getChannelFromSnipeId(snipe.snipeId), participant.powerup);
-          }
-        }
-      });
-      break;
-    case "freeze":
-      sassyMessage = `@${consumer} played Freeze.  `;
-      sassyMessage += `Any action by anyone other than ${consumer} or @croupier during `;
-      sassyMessage += `the next 10 seconds will be ignored and instead increase ${consumer}'s `;
-      sassyMessage += `position by 1.`;
-      snipe.chatSend(sassyMessage);
-      snipe.freeze = consumer;
-      setTimeout(() => {
-        snipe.chatSend(`@${consumer}'s freeze has expired!`);
-        snipe.freeze = undefined;
-      }, 1000 * 10);
-      break;
-    case "the-final-countdown":
-      snipe.betting_stops = moment().add(60, "seconds");
-      sassyMessage = `@${consumer} played The Final Countdown.  `;
-      sassyMessage += `Will things ever be the same again?  60 seconds on the clock.  `;
-      sassyMessage += `It's the final countdown.`;
-      snipe.chatSend(sassyMessage);
-      doNotResetClock = true;
-      break;
-    case "level-the-playing-field":
-      Object.keys(snipe.positionSizes).forEach((username) => {
-        snipe.positionSizes[username] = 1;
-      });
-      sassyMessage = `@${consumer} leveled the playing field in a big way.`;
-      sassyMessage += `  Everyone's positions are now equal.  One love.`;
-      snipe.chatSend(sassyMessage);
-      break;
-    case "half-life":  // Cut the remaining time in half
-      const timeToSubtract: number = Math.floor(getTimeLeft(snipe) / 2.0);
-      snipe.betting_stops = snipe.betting_stops.subtract(timeToSubtract, "seconds");
-      snipe.chatSend(`@${consumer} chopped ${timeToSubtract} seconds off the clock.`);
-      doNotResetClock = true;
-      break;
-    case "double-life": // Double the remaining time
-      const timeToAdd: number = Math.floor(getTimeLeft(snipe));
-      snipe.betting_stops = snipe.betting_stops.add(timeToAdd, "seconds");
-      snipe.chatSend(`@${consumer} added ${timeToAdd} seconds to the clock.`);
-      doNotResetClock = true;
-      break;
-    case "assassin": // Reduce the pot leader's position size to 1
-      snipe.positionSizes[leader] = 1;
-      sassyMessage = `@${consumer}'s :gun: seriously injured @${leader} and their position size is now 1.`;
-      snipe.chatSend(sassyMessage);
-      break;
-    case "popularity-contest":
-      if (consumer === leader) {
-        snipe.chatSend(`You cannot challenge yourself in this game. ::powerup fizzles::`);
-        return;
-      }
-
-      sassyMessage = `@${consumer} called a popularity contest to challenge @${leader}'s throne!`;
-      sassyMessage +=  `  Whom do you prefer?  `;
-      sassyMessage += `First to 3 votes wins `;
-      sassyMessage += `(4 votes including the initial reaction seeded by me the Croupier)!`;
-      bot.chat.send(channel, {
-        body: sassyMessage,
-      }).then((msgData) => {
-        const challengerReaction: Promise<any> = bot.chat.react(channel, msgData.id, `${consumer}`);
-        const leaderReaction: Promise<any> = bot.chat.react(channel, msgData.id, `${leader}`);
-        Promise.all([challengerReaction, leaderReaction]).then((values) => {
-          snipe.popularityContests.push({
-            challenger: consumer,
-            leader,
-            pollMessageId: msgData.id,
-            votesForChallenger: [],
-            votesForLeader: [],
-          });
-        });
-      });
-      break;
-    case "double-edged-sword": // Even chance of halving or doubling one's position size
-      if (Math.random() >= 0.5) {
-        snipe.positionSizes[consumer] = 2 * snipe.positionSizes[consumer];
-        sassyMessage = `A favorable day!  @${consumer}'s position size has doubled`;
-        sassyMessage += ` to ${snipe.positionSizes[consumer]}`;
-        snipe.chatSend(sassyMessage);
-      } else {
-        snipe.positionSizes[consumer] = Math.ceil(snipe.positionSizes[consumer] / 2);
-        sassyMessage = `Ouch! @${consumer} cut their hand on the double edged sword`;
-        sassyMessage += ` and is now dealing with ${snipe.positionSizes[consumer]}.`;
-        snipe.chatSend(sassyMessage);
-      }
-      break;
-    default:
-      // nothing.
-      break;
-  }
-  updateSnipeLog(channel);
-  if (!doNotResetClock) {
-    resetSnipeClock(channel);
-  }
 }
 
 function checkForPopularityContestVote(msg: MessageSummary): void {
@@ -1401,7 +1296,11 @@ function checkForPopularityContestEnd(channel: ChatChannel, pollMessageId: strin
       snipe.popularityContests.splice(contestIdx, 1);
     } else if (contest.votesForLeader.length >= 3) {
       snipe.positionSizes[contest.challenger] = 1;
-      snipe.chatSend(`@${contest.challenger} lost the popular vote and is punished.  Position size = 1.`);
+
+      let sassyContestMessage = `@${contest.challenger} lost the popular vote and is punished. `;
+      sassyContestMessage += `${contest.challenger}'s position size = 1.  `;
+      sassyContestMessage += `@${contest.leader} reigns supreme.  Position size = 1.`
+      snipe.chatSend(sassyContestMessage);
       // mark the contest closed
       snipe.popularityContests.splice(contestIdx, 1);
     }
