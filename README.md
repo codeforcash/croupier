@@ -4,7 +4,7 @@
 
 1. `npm install`
 2. `npm install -g ts-node --save`
-3. Create a MySQL database:
+3. Create a MySQL table:
 ```
 CREATE TABLE `snipes` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
@@ -28,12 +28,12 @@ CREATE TABLE `snipes` (
 4. Create two paperkeys within Keybase for your bot (click the Devices tab within the Keybase GUI).
 5. Set these envvars:
 
-    a. `CROUPIER_PAPERKEY_1`
-    b. `CROUPIER_PAPERKEY_2`
-    c. `MYSQL_DB`
-    d. `MYSQL_HOST`
-    e. `MYSQL_PASSWORD`
-    f. `MYSQL_USER`
+    * `CROUPIER_PAPERKEY_1`
+    * `CROUPIER_PAPERKEY_2`
+    * `MYSQL_DB`
+    * `MYSQL_HOST`
+    * `MYSQL_PASSWORD`
+    * `MYSQL_USER`
 6. Run the bot with `ts-node index.ts`
 
 
