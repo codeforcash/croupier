@@ -13,10 +13,10 @@ async function main(): Promise<any> {
   croupier = new Croupier("croupier",
     process.env.CROUPIER_PAPERKEY_1,
     process.env.CROUPIER_PAPERKEY_2,
-    process.env.MYSQL_USER,
-    process.env.MYSQL_PASSWORD,
-    process.env.MYSQL_DB,
-    process.env.MYSQL_HOST);
+    process.env.MONGODB_USERNAME,
+    process.env.MONGODB_PASSWORD,
+    process.env.MONGODB_HOST,
+    true);
   await croupier.run();
 }
 

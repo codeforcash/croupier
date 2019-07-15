@@ -1,9 +1,9 @@
 import * as _ from "lodash";
 import * as moment from "moment";
-import * as mysql from "mysql";
 import * as os from "os";
 import * as throttledQueue from "throttled-queue";
 import * as Bot from "./keybase-bot";
+import * as mongodb from "mongodb";
 import Snipe from "./snipe";
 
 import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
@@ -27,22 +27,27 @@ class Croupier {
   public paperKey1: string;
   public paperKey2: string;
 
-  private mySqlCredentials: object;
+  private mongoDbUri: string;
+  private mongoDbClient: mongodb.MongoClient;
 
   public constructor(botUsername,
                      paperKey1,
                      paperKey2,
-                     mySqlUsername,
-                     mySqlPassword,
-                     mySqlDatabase,
-                     mySqlHost) {
+                     mongoDbUsername,
+                     mongoDbPassword,
+                     mongoDbHost,
+                     isCluster) {
 
-    this.mySqlCredentials = {
-      database : mySqlDatabase,
-      host     : mySqlHost,
-      password : mySqlPassword,
-      user     : mySqlUsername,
-    };
+    let uri;
+    if (isCluster) {
+      uri = "mongodb+srv://";
+    } else {
+      uri = "mongodb://";
+    }
+    uri += `${mongoDbUsername}:${mongoDbPassword}@${mongoDbHost}`;
+    uri += `/croupier?retryWrites=true&w=majority`;
+    this.mongoDbUri = uri;
+
 
     this.botUsername = botUsername;
 
@@ -85,13 +90,10 @@ class Croupier {
 
   public documentSnipe(snipe: Snipe, reason: string): void {
 
+    const self = this;
     let wasCancelled: number;
     let winner: string;
     let cancellationReason: string;
-
-    const connection: mysql.Connection = mysql.createConnection(this.mySqlCredentials);
-
-    connection.connect();
 
     if (reason === "lack-of-participants" || reason === "flip-error") {
       wasCancelled = 1;
@@ -103,21 +105,32 @@ class Croupier {
       cancellationReason = null;
     }
 
-    connection.query(`UPDATE snipes
-      SET
-        winner=${connection.escape(winner)},
-        was_cancelled=${connection.escape(wasCancelled)},
-        cancellation_reason=${connection.escape(cancellationReason)},
-        in_progress=0
-      WHERE
-        id=${connection.escape(snipe.snipeId)}
-      `, (error, results, fields) => {
-        if (error) {
-          console.log(error);
-        }
-      });
+    const myquery = { _id: snipe.snipeId };
 
-    connection.end();
+    const newvalues = {
+      $set: {
+        winner: winner,
+        was_cancelled: wasCancelled,
+        cancellation_reason: cancellationReason,
+        in_progress: 0,
+        updated_at: +new Date(),
+      }
+    };
+
+
+    self.mongoDbClient = new mongodb.MongoClient(this.mongoDbUri, { reconnectTries: Number.MAX_VALUE,
+      reconnectInterval: 1000,
+      useNewUrlParser: true });
+    self.mongoDbClient.connect(err => {
+      const collection = self.mongoDbClient.db("croupier").collection("snipes");
+      collection.updateOne(myquery, newvalues, (err, res) => {
+        if (err) {
+          throw(err);
+        }
+        self.mongoDbClient.close();
+      })
+    });
+
   }
 
   public processRefund(txn: Transaction, channel: ChatChannel): void {
@@ -151,63 +164,64 @@ class Croupier {
 
   public updateSnipeLog(channel: ChatChannel): void {
 
+    const self = this;
     const snipe: Snipe = this.activeSnipes[JSON.stringify(channel)];
     const participants: string = JSON.stringify(snipe.participants);
     const positionSizes: string = JSON.stringify(snipe.positionSizes);
     const blinds: number = snipe.blinds;
     const snipeId: number = snipe.snipeId;
 
-    const connection: mysql.Connection = mysql.createConnection({
-      database : process.env.MYSQL_DB,
-      host     : process.env.MYSQL_HOST,
-      password : process.env.MYSQL_PASSWORD,
-      user     : process.env.MYSQL_USER,
-    });
-
-    connection.connect();
-
-    console.log(snipe);
-
-    const query: string = `UPDATE snipes SET
-      participants=${connection.escape(participants)},
-      position_sizes=${connection.escape(positionSizes)},
-      blinds=${connection.escape(blinds)},
-      pot_size=${connection.escape(snipe.calculatePotSize())},
-      clock_remaining=${connection.escape(snipe.getTimeLeft())}
-      WHERE
-      id=${connection.escape(snipeId)}`;
-    connection.query(query, (error, results, fields) => {
-      if (error) {
-        console.log(error);
+    const myquery = { _id: snipe.snipeId };
+    const newvalues = {
+      $set: {
+        participants: participants,
+        position_sizes: positionSizes,
+        blinds: blinds,
+        pot_size: snipe.calculatePotSize(),
+        clock_remaining: snipe.getTimeLeft(),
+        updated_at: +new Date()
       }
+    };
+
+    self.mongoDbClient = new mongodb.MongoClient(this.mongoDbUri, { reconnectTries: Number.MAX_VALUE,
+      reconnectInterval: 1000,
+      useNewUrlParser: true });
+    self.mongoDbClient.connect(err => {
+      const collection = self.mongoDbClient.db("croupier").collection("snipes");
+      collection.updateOne(myquery, newvalues, (err, res) => {
+        if (err) {
+          throw(err);
+        }
+        self.mongoDbClient.close();
+      })
     });
-    connection.end();
+
   }
 
   private logNewSnipe(snipe: Snipe): Promise<any> {
 
-    return new Promise((resolve) => {
+    const self = this;
+    return new Promise((resolve, reject) => {
 
-      const connection: mysql.Connection = mysql.createConnection(this.mySqlCredentials);
-
-      connection.connect();
-
-      connection.query(`INSERT INTO snipes
-        (channel, countdown, betting_started)
-        VALUES
-        (${connection.escape(JSON.stringify(snipe.channel))},
-        ${connection.escape(snipe.countdown)},
-        ${connection.escape(snipe.betting_started)}
-        )`, (error, results, fields) => {
-        if (error) {
-          console.log(error);
-        }
-
-        resolve(results.insertId);
-
+      self.mongoDbClient = new mongodb.MongoClient(self.mongoDbUri, { reconnectTries: Number.MAX_VALUE,
+      reconnectInterval: 1000,
+      useNewUrlParser: true });
+      self.mongoDbClient.connect(err => {
+        const collection = self.mongoDbClient.db("croupier").collection("snipes");
+        collection.insertOne({
+          channel: snipe.channel,
+          countdown: snipe.countdown,
+          betting_started: snipe.betting_started,
+          in_progress: 1
+        }, (err, res) => {
+          if (err) {
+            console.log(err);
+            reject(err);
+          }
+          self.mongoDbClient.close();
+          resolve(res.insertedId);
+        })
       });
-      connection.end();
-
     });
 
   }
@@ -339,42 +353,46 @@ class Croupier {
     const self = this;
     return new Promise((resolve) => {
       const snipes: object = {};
+      const myquery = { in_progress: 1 };
+      self.mongoDbClient = new mongodb.MongoClient(self.mongoDbUri, { reconnectTries: Number.MAX_VALUE,
+      reconnectInterval: 1000,
+      useNewUrlParser: true });
 
-      const connection: mysql.Connection = mysql.createConnection(this.mySqlCredentials);
+      self.mongoDbClient.connect(err => {
+        const collection = self.mongoDbClient.db("croupier").collection("snipes");
+        collection.find(myquery).toArray((err, results) => {
+          if (err) {
+            throw(err);
+          }
 
-      connection.connect();
+          results.forEach((result) => {
 
-      connection.query(`SELECT * FROM snipes WHERE in_progress=1`, (error, results, fields) => {
-        if (error) {
-          console.log(error);
-        }
-
-        results.forEach((result) => {
-
-          const channel: ChatChannel = JSON.parse(result.channel);
-          snipes[JSON.stringify(channel)] = new Snipe(self, channel, {
-            bot1: self.bot1,
-            bot2: self.bot2,
-          },
-          {
-            betting_started:  parseInt(result.betting_started, 10),
-            clock_remaining: result.clock_remaining,
-            countdown: result.countdown,
-            blinds: parseFloat(result.blinds),
-            participants: JSON.parse(result.participants),
-            position_sizes: JSON.parse(result.position_sizes),
-            potSize: parseInt(result.potSize, 10),
-            snipeId: parseInt(result.id, 10),
+            const channel: ChatChannel = result.channel;
+            snipes[JSON.stringify(channel)] = new Snipe(self, channel, {
+              bot1: self.bot1,
+              bot2: self.bot2,
+            },
+            {
+              betting_started:  parseInt(result.betting_started, 10),
+              clock_remaining: result.clock_remaining,
+              countdown: result.countdown,
+              blinds: parseFloat(result.blinds),
+              participants: JSON.parse(result.participants),
+              position_sizes: JSON.parse(result.position_sizes),
+              potSize: parseInt(result.potSize, 10),
+              snipeId: result._id
+            });
           });
-        });
 
-        resolve(snipes);
+          self.mongoDbClient.close();
+          resolve(snipes);
+
+        });
       });
-      connection.end();
+
     });
 
   }
 
 }
-
 export default Croupier;
