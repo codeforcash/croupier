@@ -22,6 +22,7 @@ export interface IParticipant {
   transaction: Transaction;
   onBehalfOf?: string;
   powerup?: IPowerup;
+  freeBet?: boolean;
 }
 
 export interface IPowerup {

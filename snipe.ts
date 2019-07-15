@@ -319,6 +319,8 @@ class Snipe {
     self.croupier.updateSnipeLog(self.channel);
   }
 
+
+
   public clearSnipe(reason: string): void {
     console.log("clearing cuz ", reason);
     this.croupier.documentSnipe(this, reason);
@@ -594,14 +596,16 @@ class Snipe {
 
   public calculatePotSize(): number {
     let sum: number;
-    if (this.potSizeStored) { // temp solution while we build a server solution robust enough to hold big data
+    if (this.potSizeStored) {
       sum = this.potSizeStored;
     } else {
       sum = 0;
     }
 
     this.participants.forEach((participant) => {
-      sum += parseFloat(participant.transaction.amount);
+      if(!participant.freeBet) {
+        sum += parseFloat(participant.transaction.amount);
+      }
     });
     return sum;
   }
@@ -610,18 +614,26 @@ class Snipe {
     return Math.ceil(Math.abs(moment.duration(this.betting_stops.diff(moment())).asSeconds()));
   }
 
-  public resetSnipeClock(): void {
+  public redrawBettingTable(): void {
+
+    const self = this;
     if (this.bettingTable) {
       this.bot1.chat.delete(this.channel, this.bettingTable, {}).then(() => {
-        this.chatSend(this.buildBettingTable()).then((msg) => {
-          this.bettingTable = msg.id;
+        self.chatSend(self.buildBettingTable()).then((msg) => {
+          self.bettingTable = msg.id;
         });
       });
     } else {
       this.chatSend(this.buildBettingTable()).then((msg) => {
-        this.bettingTable = msg.id;
+        self.bettingTable = msg.id;
       });
     }
+
+  }
+
+  public resetSnipeClock(): void {
+
+    this.redrawBettingTable();
     const timeRemaining: number = Math.ceil(this.getTimeLeft());
     console.log("time remaining", timeRemaining);
     clearTimeout(this.timeout);
@@ -713,18 +725,13 @@ class Snipe {
 
   public executeFlipOrCancel(): void {
     const self = this;
-    if (self.participants) {
-      const participantUsernames: Array<string> = self.participants.map((participant) => {
-        return participant.onBehalfOf || participant.username;
-      });
-      const uniqParticipants: Array<string> = _.union(participantUsernames);
-      if (uniqParticipants.length > 1) {
-        self.flip(self.channel);
-      } else {
-        self.refundAllParticipants();
-        self.chatSend("The snipe has been canceled due to a lack of participants.");
-        self.clearSnipe("lack-of-participants");
-      }
+    const uniqParticipants: Array<string> = _.union(Object.keys(self.positionSizes));
+    if (uniqParticipants.length > 1) {
+      self.flip(self.channel);
+    } else {
+      self.refundAllParticipants();
+      self.chatSend("The snipe has been canceled due to a lack of participants.");
+      self.clearSnipe("lack-of-participants");
     }
   }
 
@@ -1029,14 +1036,13 @@ class Snipe {
           }
 
           self.croupierMessages[reactionContent.reaction.m].push(msg.sender.username);
-          if(typeof(self.positionSizes[msg.sender.username])==='undefined') {
-            self.positionSizes[msg.sender.username] = 1;
-          } else {
-            self.positionSizes[msg.sender.username] += 1;
-          }
-
           self.chatSend(`@${msg.sender.username} position++, thanks to positive energy!`);
-
+          self.addSnipeParticipant({
+            fromUsername: msg.sender.username,
+            amount: 0.01,
+            freeBet: true,
+          }, msg.sender.username);
+          self.resetSnipeClock();
         }
 
       }
