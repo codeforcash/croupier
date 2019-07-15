@@ -31,7 +31,7 @@ class Snipe {
   public clock: string;
   public timeout: NodeJS.Timeout;
   public countdown: number;
-  public snipeId: number;
+  public snipeId: string;
   public betting_stops: moment.Moment;
   public chatSend: ThrottledChat;
   public moneySend: ThrottledMoneyTransfer;
@@ -47,10 +47,12 @@ class Snipe {
   public freeze: string;
   public powerups: Array<IPowerupAward>;
   public flipMonitorIntervals: object;
+  public croupierMessages: object;
 
   public constructor(croupier, channel, bots, options) {
 
     const self = this;
+    this.croupierMessages = {};
     this.runningClocks = {};
     this.flipMonitorIntervals = {};
     this.croupier = croupier;
@@ -84,8 +86,10 @@ class Snipe {
         chatThrottle(() => {
           self.bot1.chat.send(channel, {
             body: message,
-          }, undefined).then((messageId) => {
-            resolveChatThrottle(messageId);
+          }, undefined).then((sentMessage) => {
+
+            self.croupierMessages[sentMessage.id] = [];
+            resolveChatThrottle(sentMessage);
           });
         });
       });
@@ -279,6 +283,7 @@ class Snipe {
 
   }
 
+
   public addSnipeParticipant(txn: Transaction, onBehalfOf?: string): void {
 
     const self = this;
@@ -433,7 +438,7 @@ class Snipe {
 
   public makeSubteamForFlip(): void {
     const self = this;
-    const subteamName: string = `croupierflips.snipe${self.snipeId}`;
+    const subteamName: string = `croupierflips.snipe${self.snipeId.substr(0,11)}`;
     const usernamesToAdd: Array<object> = [{username: "croupier", role: "admin"}];
 
     Object.keys(self.positionSizes).forEach((username) => {
@@ -895,9 +900,7 @@ class Snipe {
         }
         console.log(`attempting to edit message ${self.clock} in channel ${self.channel}`);
         if (self.clock === null || typeof(self.clock) === "undefined") {
-          self.bot1.chat.send(self.channel, {
-            body: hourglass + ` betting stops ${stopsWhen}`,
-          }, undefined).then((sentMessage) => {
+          self.chatSend(hourglass + ` betting stops ${stopsWhen}`).then((sentMessage) => {
             self.clock = sentMessage.id;
           }).catch((e) => {
             console.log(e);
@@ -991,6 +994,54 @@ class Snipe {
         }
       });
     }
+  }
+
+  public checkForFreeEntry(msg: MessageSummary): void {
+    const reactionId: string = msg.id;
+    const reactionContent: IReactionContent = msg.content;
+    const self = this;
+    // msg.sender.username
+
+    console.log("-------------------------");
+
+    console.log('Checking for free entry');
+
+    let freeEntryReactions = [':smile:', ':smiley:', ':raising_hand:', ':man-raising-hand:', ':woman-raising-hand:', ':thumbsup:', ':clap:', ':man-tipping-hand:', ':woman-tipping-hand:', ':sparkles:', ':zany_face:', ':+1:'];
+    if(freeEntryReactions.includes(reactionContent.reaction.b)) {
+
+      console.log('Emoji was included in the free entry list...');
+
+      console.log(self.croupierMessages);
+      console.log(reactionContent.reaction.m);
+      if(Object.keys(self.croupierMessages).includes(reactionContent.reaction.m.toString())) {
+
+        console.log('....key is included');
+
+        if(!self.croupierMessages[reactionContent.reaction.m].includes(msg.sender.username)) {
+
+
+
+          console.log('....username is not already included in this messages list');
+
+
+          if(!self.betting_open) {
+            return;
+          }
+
+          self.croupierMessages[reactionContent.reaction.m].push(msg.sender.username);
+          if(typeof(self.positionSizes[msg.sender.username])==='undefined') {
+            self.positionSizes[msg.sender.username] = 1;
+          } else {
+            self.positionSizes[msg.sender.username] += 1;
+          }
+
+          self.chatSend(`@${msg.sender.username} position++, thanks to positive energy!`);
+
+        }
+
+      }
+    }
+
   }
 
   public checkReactionForPowerup(msg: MessageSummary): void {
@@ -1102,9 +1153,7 @@ class Snipe {
         sassyMessage +=  `  Whom do you prefer?  `;
         sassyMessage += `First to 3 votes wins `;
         sassyMessage += `(4 votes including the initial reaction seeded by me the Croupier)!`;
-        self.bot1.chat.send(self.channel, {
-          body: sassyMessage,
-        }, undefined).then((msgData) => {
+        self.chatSend(sassyMessage).then((msgData) => {
           const challengerReaction: Promise<any> = self.bot1.chat.react(self.channel, msgData.id, `${consumer}`);
           const leaderReaction: Promise<any> = self.bot1.chat.react(self.channel, msgData.id, `${leader}`);
           Promise.all([challengerReaction, leaderReaction]).then((values) => {

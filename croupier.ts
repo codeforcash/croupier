@@ -169,7 +169,7 @@ class Croupier {
     const participants: string = JSON.stringify(snipe.participants);
     const positionSizes: string = JSON.stringify(snipe.positionSizes);
     const blinds: number = snipe.blinds;
-    const snipeId: number = snipe.snipeId;
+    const snipeId: string = snipe.snipeId;
 
     const myquery = { _id: snipe.snipeId };
     const newvalues = {
@@ -338,6 +338,7 @@ class Croupier {
       if (msg.content.type === "reaction") {
         snipe.checkForPopularityContestVote(msg);
         snipe.checkReactionForPowerup(msg);
+        snipe.checkForFreeEntry(msg);
       }
       if (msg.content.type === "delete") {
         snipe.checkForPopularityContestVoteRemoval(msg);
@@ -354,11 +355,15 @@ class Croupier {
     return new Promise((resolve) => {
       const snipes: object = {};
       const myquery = { in_progress: 1 };
-      self.mongoDbClient = new mongodb.MongoClient(self.mongoDbUri, { reconnectTries: Number.MAX_VALUE,
-      reconnectInterval: 1000,
-      useNewUrlParser: true });
+      self.mongoDbClient = new mongodb.MongoClient(self.mongoDbUri, {
+        reconnectTries: Number.MAX_VALUE,
+        reconnectInterval: 1000,
+        useNewUrlParser: true });
 
       self.mongoDbClient.connect(err => {
+        if (err) {
+          throw(err);
+        }
         const collection = self.mongoDbClient.db("croupier").collection("snipes");
         collection.find(myquery).toArray((err, results) => {
           if (err) {

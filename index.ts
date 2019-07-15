@@ -1,18 +1,13 @@
-import * as sourceMapSupport from "source-map-support";
 import Croupier from "./croupier";
 import * as Bot from "./keybase-bot";
-
-sourceMapSupport.install({
-  environment: "node",
-});
 
 let croupier: Croupier;
 
 async function main(): Promise<any> {
 
-  croupier = new Croupier("croupier",
-    process.env.CROUPIER_PAPERKEY_1,
-    process.env.CROUPIER_PAPERKEY_2,
+  croupier = new Croupier("devcroupier",
+    process.env.DEV_CROUPIER_PAPERKEY1,
+    process.env.DEV_CROUPIER_PAPERKEY2,
     process.env.MONGODB_USERNAME,
     process.env.MONGODB_PASSWORD,
     process.env.MONGODB_HOST,

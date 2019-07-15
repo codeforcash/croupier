@@ -3,8 +3,8 @@ import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
 export interface IReactionContent {
   type: "reaction";
   reaction: {
-      m: number|string;
-      b: number|string;
+      m: any;
+      b: any;
   };
 }
 
