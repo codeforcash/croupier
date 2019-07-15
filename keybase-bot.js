@@ -672,22 +672,26 @@ class Chat extends ClientBase {
 
      child.stdout.on('data', (data) => {
         console.log(`stdout: ${data}`);
-        stdout.push(data);
+        stdout.push(data.toString('utf8'));
       });
 
       child.stderr.on('data', (data) => {
         console.log(`stderr: ${data}`);
-        stderr.push(data);
+        stderr.push(data.toString('utf8'));
       });
 
       child.on('close', (code) => {
         console.log(`child process exited with code ${code}`);
-        resolve(true, stdout, stderr);
+        console.log('again, stdout:', stdout);
+        console.log('stdout length: ', stdout.length);
+        console.log('stdout 0', stdout[0]);
+        console.log('stdout 1', stdout[1]);
+        resolve([true, stdout[1], stderr]);
       });
 
       child.on('error', (err) => {
         console.log(`child process errored with err ${err}`);
-        resolve(err, stdout, stderr);
+        resolve([err, stdout, stderr]);
       });
 
     });

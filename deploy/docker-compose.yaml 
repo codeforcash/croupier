@@ -1,0 +1,24 @@
+version: '3.2'
+services:
+    croupier:
+        image: keybase_croupier:latest
+        environment:
+            BOT_OWNER: zackburt
+            CROUPIER_PAPERKEY_1: warrior laugh...redacted...
+            CROUPIER_PAPERKEY_2: warrior laugh...redacted...
+            MYSQL_HOST: croupier-cluster.redacted.us-east-1.rds.amazonaws.com
+            MYSQL_USER: croupier
+            MYSQL_PASSWORD: redacted
+            MYSQL_DB: croupier
+        entrypoint: /home/keybase/scripts/start.sh
+        restart: always
+        volumes:
+          - type: volume
+            source: 0_home
+            target: /home/keybase
+          - type: bind
+            source: ./0_scripts
+            target: /home/keybase/scripts
+
+volumes:
+    0_home:

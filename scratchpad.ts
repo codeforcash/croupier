@@ -13,38 +13,9 @@ import "source-map-support/register";
 
 const bot: Bot = new Bot(os.homedir());
 
-const botUsername: string = "croupier";
-const paperkey: string = process.env.CROUPIER_PAPERKEY_1;
+const botUsername: string = "zackburt2";
+const paperkey: string = process.env.ZACKBURT2_PAPERKEY;
 
-
-function makeSubteamForFlip(): void {
-
-  const subteamName: string = `croupierflips.snipeZBTEST`;
-
-  const usernamesToAdd: Array<object> = [{username: "croupier", role: "admin"}];
-
-  usernamesToAdd.push({
-    role: "reader",
-    username: 'zackburt',
-  });
-
-  bot.team.createSubteam(subteamName).then((res) => {
-
-    console.log('Subteam creation was successful', res);
-    bot.team.addMembers({
-      team: subteamName,
-      usernames: usernamesToAdd,
-    }).then((addMembersRes) => {
-      const newSubteam: any = {
-        membersType: "team", name: subteamName,
-      };
-      bot.chat.send(newSubteam, {
-        body: 'hello '
-      });
-    });
-  });
-
-}
 
 async function main() {
 
@@ -111,5 +82,35 @@ main();
 //     console.log('err', err);
 //   }
 
+
+// }
+
+
+// function makeSubteamForFlip(): void {
+
+//   const subteamName: string = `croupierflips.snipeZBTEST`;
+
+//   const usernamesToAdd: Array<object> = [{username: "croupier", role: "admin"}];
+
+//   usernamesToAdd.push({
+//     role: "reader",
+//     username: 'zackburt',
+//   });
+
+//   bot.team.createSubteam(subteamName).then((res) => {
+
+//     console.log('Subteam creation was successful', res);
+//     bot.team.addMembers({
+//       team: subteamName,
+//       usernames: usernamesToAdd,
+//     }).then((addMembersRes) => {
+//       const newSubteam: any = {
+//         membersType: "team", name: subteamName,
+//       };
+//       bot.chat.send(newSubteam, {
+//         body: 'hello '
+//       });
+//     });
+//   });
 
 // }
