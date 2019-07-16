@@ -38,6 +38,16 @@ class Croupier {
                      mongoDbHost,
                      isCluster) {
 
+
+    let mongoDbDatabase;
+    if (process.env.TEST) {
+      mongoDbDatabase = "testcroupier";
+    } else if (process.env.DEVELOPMENT) {
+      mongoDbDatabase = "devcroupier";
+    } else {
+      mongoDbDatabase = "croupier";
+    }
+
     let uri;
     if (isCluster) {
       uri = "mongodb+srv://";
@@ -45,7 +55,7 @@ class Croupier {
       uri = "mongodb://";
     }
     uri += `${mongoDbUsername}:${mongoDbPassword}@${mongoDbHost}`;
-    uri += `/croupier?retryWrites=true&w=majority`;
+    uri += `/${mongoDbDatabase}?retryWrites=true&w=majority`;
     this.mongoDbUri = uri;
 
 
@@ -57,27 +67,24 @@ class Croupier {
     this.paperKey2 = paperKey2;
   }
 
-  public async run() {
-
-    const self = this;
-
+  public async init() {
+    this.activeSnipes = {};
     await this.bot1.init(this.botUsername, this.paperKey1, null);
     await this.bot2.init(this.botUsername, this.paperKey2, null);
+  }
 
+  public async run(loadActiveSnipes) {
+
+
+
+    this.init();
     console.log("both paper keys initialized");
-    this.activeSnipes = await this.loadActiveSnipes();
-    console.log("here, the active snipes we found: ");
-    console.log(this.activeSnipes);
 
-    Object.keys(this.activeSnipes).forEach((chid) => {
-      const snipeChannel: ChatChannel = JSON.parse(chid);
-      const snipe: Snipe = self.activeSnipes[chid];
-      self.activeSnipes[chid].chatSend("Croupier was restarted... Previous bets are still valid!");
-      self.activeSnipes[chid].chatSend(snipe.buildBettingTable());
-      snipe.launchSnipe();
-    });
+    if(loadActiveSnipes) {
+      this.activeSnipes = await this.loadActiveSnipes();
+      console.log("active snipes loaded");
+    }
 
-    console.log("active snipes loaded");
     await this.bot1.chat.watchAllChannelsForNewMessages(this.routeIncomingMessage.bind(this),
       (e) => console.error(e), undefined);
 
@@ -247,16 +254,10 @@ class Croupier {
       return;
     }
 
-    // Ignore all bets below the minimum
-    let blinds: number;
-    if (typeof(snipe) === "undefined") {
-      blinds = 0.01;
-    } else {
-      blinds = snipe.blinds;
-    }
-    if (parseFloat(txn.amount) < blinds) {
+
+    if (parseFloat(txn.amount) < 0.01) {
       this.bot1.chat.send(channel, {
-        body: `Thanks for the tip, but bets should be >= ${blinds}XLM`,
+        body: `Thanks for the tip, but bets should be >= 0.01XLM`,
       }, undefined);
       return;
     }
@@ -264,6 +265,17 @@ class Croupier {
     if (typeof(snipe) === "undefined") {
       this.startNewSnipe(msg, txn);
     } else {
+
+
+      //  Calculate pot size.
+      //  If pot size + this bet >= 2500 USD, refund the bet
+      //  Say the maximum pot size is $2500 USD to comply
+      //  with various legal ideas
+
+      // Ignore all bets below the minimum
+
+
+
       if (snipe.betting_open === false) {
         snipe.chatSend(`Betting has closed - refunding`);
         // Ensure the transaction is Completed before refunding
@@ -390,6 +402,16 @@ class Croupier {
           });
 
           self.mongoDbClient.close();
+
+
+          Object.keys(snipes).forEach((chid) => {
+            const snipeChannel: ChatChannel = JSON.parse(chid);
+            const snipe: Snipe = snipes[chid];
+            snipes[chid].chatSend("Croupier was restarted... Previous bets are still valid!");
+            snipes[chid].chatSend(snipe.buildBettingTable());
+            snipe.launchSnipe();
+          });
+
           resolve(snipes);
 
         });

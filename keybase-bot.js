@@ -701,26 +701,32 @@ class Chat extends ClientBase {
 
   sendMoneyInChat(channel, team, amount, recipient) {
 
-    console.log('sendMoneyInChat: 1');
-    const child = child_process.spawn(`${croupierDirectory}/scripts/sendmoney.sh`,
-      [channel, team, amount, recipient, this._workingDir, this.homeDir]);
+    return new Promise((resolve, reject) => {
 
+      console.log('sendMoneyInChat: 1');
+      const child = child_process.spawn(`${croupierDirectory}/scripts/sendmoney.sh`,
+        [channel, team, amount, recipient, this._workingDir, this.homeDir]);
 
-    child.stdout.on('data', (data) => {
-      console.log(`stdout: ${data}`);
+      child.stdout.on('data', (data) => {
+        console.log(`stdout: ${data}`);
+      });
+
+      child.stderr.on('data', (data) => {
+        console.log(`stderr: ${data}`);
+      });
+
+      child.on('close', (code) => {
+        console.log(`child process exited with code ${code}`);
+        resolve(code);
+      });
+
+      child.on('error', (err) => {
+        console.log(`child process errored with err ${err}`);
+        reject(code);
+      });
+
     });
 
-    child.stderr.on('data', (data) => {
-      console.log(`stderr: ${data}`);
-    });
-
-    child.on('close', (code) => {
-      console.log(`child process exited with code ${code}`);
-    });
-
-    child.on('error', (err) => {
-      console.log(`child process errored with err ${err}`);
-    });
 
   }
 
@@ -1642,7 +1648,7 @@ class Bot {
     // talk to a deinit'ed service
     await this.chat._deinit();
     await this._service.deinit();
-    await rmdirRecursive(this._workingDir);
+    // await rmdirRecursive(this._workingDir);
   }
 
   async _prepWorkingDir() {

@@ -1,4 +1,43 @@
 {
+  "name": "croupier",
+  "keywords": [
+    "keybase",
+    "keybase bot",
+    "keybase api",
+    "stellar",
+    "stellar lumens",
+    "stellar network",
+    "chatbot application",
+    "crypto",
+    "social gaming"
+  ],
+  "homepage": "https://github.com/codeforcash/croupier",
+  "repository": "git@github.com:codeforcash/croupier.git",
+  "bugs": {
+    "url": "https://github.com/codeforcash/croupier/issues"
+  },
+  "scripts": {
+    "test": "jest --runInBand"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix"
+    ],
+    "*.{json,md,ts}": [
+      "prettier --write",
+      "git add"
+    ],
+    "*.js": [
+      "eslint --fix",
+      "git add"
+    ]
+  },
+  "author": "Zack Burt <zack@codefor.cash>",
   "dependencies": {
     "@types/lodash": "^4.14.134",
     "@types/node": "^12.0.7",
@@ -17,8 +56,13 @@
     "typescript": "^3.5.1"
   },
   "devDependencies": {
+    "@types/jest": "^24.0.15",
     "eslint": "^5.16.0",
     "eslint-config-airbnb-base": "^13.1.0",
-    "eslint-plugin-import": "^2.17.3"
+    "eslint-plugin-import": "^2.17.3",
+    "husky": ">=1",
+    "jest": "^24.8.0",
+    "lint-staged": ">=8",
+    "ts-jest": "^24.0.2"
   }
 }

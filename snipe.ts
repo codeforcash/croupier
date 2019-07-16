@@ -203,11 +203,32 @@ class Snipe {
   // but not if they have recently been issued a powerup
   public shouldIssuePowerup(): boolean {
     const count: number = this.participants.length;
+
+    const self = this;
+
+
+    // Have there been at least 3 bets?
+    // And have the 3 most recent bets all been entered by the same person?
     if (count >= 3
         && this.participants[count - 1].username === this.participants[count - 2].username
         && this.participants[count - 2].username === this.participants[count - 3].username
       ) {
 
+      //  Don't grant powerups for free bets
+      if(this.participants[count-3].freeBet
+        || this.participants[count-2].freeBet
+        || this.participants[count-1].freeBet) {
+        return false;
+      }
+
+      //  Don't grant a powerup if the bets were below blinds
+      if(this.participants[count-1].transaction.amount < self.blinds ||
+          this.participants[count-2].transaction.amount < self.blinds ||
+          this.participants[count-3].transaction.amount < self.blinds) {
+        return false;
+      }
+
+      //  Get the index of the bet for which the most recent powerup was issued
       let lastPowerupIndex: number = 0;
       this.participants.forEach((participant, idx) => {
         if (participant.powerup) {
@@ -215,9 +236,14 @@ class Snipe {
         }
       });
 
+      // Have we never issued a powerup before? Then, issue.
       if (lastPowerupIndex === 0) {
         return true;
       }
+
+      // Has it been at least 3 powerups since the most recent powerup was issued?
+      // This logic doesn't work if there has never been a powerup issued,
+      // hence the extra condition check ^
       if (((count - 1) - lastPowerupIndex) >= 3) {
         return true;
       } else {
@@ -664,7 +690,9 @@ class Snipe {
     let message: string = `The snipe is on (**#${self.snipeId}**).  `;
     message += `Bet in multiples of 0.01XLM.  Betting format:`;
     message += `\`\`\`+0.01XLM@${self.croupier.botUsername}\`\`\``;
-    message += `Minimum bet: **${this.displayFixedNice(self.blinds)}XLM**`;
+    message += `Minimum bet: 0.01XLM\n`;
+    message += `Make 3 uninterrupted bets of **${this.displayFixedNice(self.blinds)}XLM**`;
+    message += ` and receive a powerup!`;
 
     self.chatSend(message);
 
@@ -879,7 +907,7 @@ class Snipe {
     if (blinds !== this.blinds) {
       this.blinds = blinds;
       this.croupier.updateSnipeLog(this.channel);
-      this.chatSend(`Blinds are raised. Minimum bet: **${this.displayFixedNice(blinds)}XLM**`);
+      this.chatSend(`Blinds are raised. Minimum bets to receive powerup: **${this.displayFixedNice(blinds)}XLM**`);
     }
   }
 
