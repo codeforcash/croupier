@@ -12,7 +12,7 @@ async function main(): Promise<any> {
     process.env.MONGODB_PASSWORD,
     process.env.MONGODB_HOST,
     true);
-  await croupier.run();
+  await croupier.run(true);
 }
 
 async function shutDown(): Promise<any> {

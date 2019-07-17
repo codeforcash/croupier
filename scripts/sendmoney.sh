@@ -6,8 +6,10 @@ KB_TEAM=$1
 KB_CHAN=$2
 KB_AMT=$3
 KB_RCPT=$4
-KB_SPAWN="expect -c 'spawn ${WORKING_DIR}/keybase --home ${HOME_DIR} chat send --channel ${KB_TEAM} ${KB_CHAN} \"+${KB_AMT}XLM@${KB_RCPT}\" ; expect \"if you are sure\" ; send -- \"sendmoney\r\" ; expect eof'"
+KB_SPAWN="expect -c 'spawn ${WORKING_DIR}/keybase chat send --channel ${KB_CHAN} ${KB_TEAM} \"+${KB_AMT}XLM@${KB_RCPT}\" ; expect \"if you are sure\" ; send -- \"sendmoney\r\" ; expect eof'"
 echo $KB_SPAWN
-pushd $WORKING_DIR
 eval $KB_SPAWN
-popd
+process_id=`/bin/ps -fu $USER| grep "expect" | grep -v "grep" | awk '{print $2}'`
+echo $process_id
+wait $process_id
+echo "Ah"

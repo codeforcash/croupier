@@ -71,21 +71,22 @@ class Croupier {
     this.activeSnipes = {};
     await this.bot1.init(this.botUsername, this.paperKey1, null);
     await this.bot2.init(this.botUsername, this.paperKey2, null);
+    console.log("both paper keys initialized");
   }
 
   public async run(loadActiveSnipes) {
 
 
-
-    this.init();
-    console.log("both paper keys initialized");
+    if(!this.bot1._service.initialized) {
+      await this.init();
+    }
 
     if(loadActiveSnipes) {
       this.activeSnipes = await this.loadActiveSnipes();
       console.log("active snipes loaded");
     }
 
-    await this.bot1.chat.watchAllChannelsForNewMessages(this.routeIncomingMessage.bind(this),
+    return this.bot1.chat.watchAllChannelsForNewMessages(this.routeIncomingMessage.bind(this),
       (e) => console.error(e), undefined);
 
   }

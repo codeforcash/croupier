@@ -14,6 +14,13 @@ import {
   IReactionContent,
 } from "../types";
 
+function timeout(time: number): Promise<void> {
+  return new Promise(resolve => {
+    setTimeout(() => {
+      resolve()
+    }, time)
+  })
+}
 
 process.env.DEVELOPMENT = undefined;
 process.env.TEST = "true";
@@ -45,36 +52,40 @@ describe('Betting Functionality', (): void => {
 
 
 
-  beforeAll(async (): Promise<void> => {
-    await croupier.init();
-    await ringo.init(process.env.CROUPIER_RINGO_USERNAME, process.env.CROUPIER_RINGO_PAPERKEY)
-    await paul.init(process.env.CROUPIER_PAUL_USERNAME, process.env.CROUPIER_PAUL_PAPERKEY)
-    await john.init(process.env.CROUPIER_JOHN_USERNAME, process.env.CROUPIER_JOHN_PAPERKEY)
-    await george.init(process.env.CROUPIER_GEORGE_USERNAME, process.env.CROUPIER_GEORGE_PAPERKEY)
-    console.log('All bots initialized!');
-    croupier.run(false);
-  })
+  beforeAll(async (done): Promise<void> => {
+    Promise.all([
+      ringo.init(process.env.CROUPIER_RINGO_USERNAME, process.env.CROUPIER_RINGO_PAPERKEY),
+      paul.init(process.env.CROUPIER_PAUL_USERNAME, process.env.CROUPIER_PAUL_PAPERKEY),
+      john.init(process.env.CROUPIER_JOHN_USERNAME, process.env.CROUPIER_JOHN_PAPERKEY),
+      george.init(process.env.CROUPIER_GEORGE_USERNAME, process.env.CROUPIER_GEORGE_PAPERKEY),
+    ]).then(async (res) => {
+      await croupier.run(false);
+      console.log('croupier is running');
+      done();
+    });
+  });
 
   afterAll(async (): Promise<void> => {
+    console.log('de initializing ringo');
     await ringo.deinit();
     await paul.deinit();
     await john.deinit();
     await george.deinit();
-    croupier.shutdown();
+    await croupier.shutdown();
   })
 
   describe('Functional snipes', (): void => {
-    it('Starts a new snipe', async (): Promise<void> => {
-
-      try {
-        await ringo.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername);
-      } catch(e) {
-        console.log('big problem', e);
-      }
-
-      expect(true).toBe(true)
-
+    it('starts a new snipe', async (): Promise<void> => {
+      const exitCode = await ringo.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername);
+      console.log('exitCode', exitCode);
+      await timeout(3000)
+      expect(true).toBe(true);
     })
+
+    test('?', () => {
+      expect(false).toBe(true);
+    })
+
   })
 
 });

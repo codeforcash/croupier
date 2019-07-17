@@ -699,13 +699,13 @@ class Chat extends ClientBase {
   }
 
 
-  sendMoneyInChat(channel, team, amount, recipient) {
+  sendMoneyInChat(topic, team, amount, recipient) {
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
 
       console.log('sendMoneyInChat: 1');
       const child = child_process.spawn(`${croupierDirectory}/scripts/sendmoney.sh`,
-        [channel, team, amount, recipient, this._workingDir, this.homeDir]);
+        [team, topic, amount, recipient, this._workingDir, this.homeDir]);
 
       child.stdout.on('data', (data) => {
         console.log(`stdout: ${data}`);
@@ -722,7 +722,7 @@ class Chat extends ClientBase {
 
       child.on('error', (err) => {
         console.log(`child process errored with err ${err}`);
-        reject(code);
+        throw err;
       });
 
     });
@@ -1644,11 +1644,12 @@ class Bot {
 
 
   async deinit() {
+    console.log('deinit', this._service.username);
     // Stop the clients first, so that they aren't trying to
     // talk to a deinit'ed service
     await this.chat._deinit();
     await this._service.deinit();
-    // await rmdirRecursive(this._workingDir);
+    await rmdirRecursive(this._workingDir);
   }
 
   async _prepWorkingDir() {
