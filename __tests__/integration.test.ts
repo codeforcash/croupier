@@ -22,9 +22,6 @@ function timeout(time: number): Promise<void> {
   })
 }
 
-process.env.DEVELOPMENT = undefined;
-process.env.TEST = "true";
-
 describe('Betting Functionality', (): void => {
 
   const botUsername = "testcroupier";
@@ -50,9 +47,12 @@ describe('Betting Functionality', (): void => {
     topicName: "general",
   }
 
-
+  const testStart = +new Date();
+  const testStartRe = new RegExp(testStart.toString());
 
   beforeAll(async (done): Promise<void> => {
+    process.env.DEVELOPMENT = undefined;
+    process.env.TEST = "true";
     Promise.all([
       ringo.init(process.env.CROUPIER_RINGO_USERNAME, process.env.CROUPIER_RINGO_PAPERKEY),
       paul.init(process.env.CROUPIER_PAUL_USERNAME, process.env.CROUPIER_PAUL_PAPERKEY),
@@ -61,30 +61,61 @@ describe('Betting Functionality', (): void => {
     ]).then(async (res) => {
       await croupier.run(false);
       console.log('croupier is running');
+      await george.chat.send(channel, {
+        body: `Test started at ${testStart}`
+      });
       done();
     });
   });
 
-  afterAll(async (): Promise<void> => {
-    console.log('de initializing ringo');
-    await ringo.deinit();
-    await paul.deinit();
-    await john.deinit();
-    await george.deinit();
-    await croupier.shutdown();
+  afterAll(async (done): Promise<void> => {
+
+    Promise.all([
+      croupier.shutdown(),
+      ringo.deinit(),
+      paul.deinit(),
+      john.deinit(),
+      george.deinit()
+    ]).then(async (res) => {
+      console.log('All bots shutdown');
+      done();
+    });
   })
 
   describe('Functional snipes', (): void => {
     it('starts a new snipe', async (): Promise<void> => {
       const exitCode = await ringo.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername);
       console.log('exitCode', exitCode);
-      await timeout(3000)
-      expect(true).toBe(true);
+      await timeout(10000)
+
+
+
+      const readResponse = await paul.chat.read(channel);
+      await timeout(2000)
+      let foundMongoIdRegex = false;
+      let messageWithinTest = false;
+      for(const msg of readResponse.messages.reverse()) {
+        if(msg.content.type === 'text') {
+          const msgContent = msg.content.text.body;
+          if(testStartRe.test(msgContent)) {
+            messageWithinTest = true;
+          }
+          if(!messageWithinTest) {
+            return;
+          }
+          if(/\(\*\*#[a-f\d]{24}\*\*\)/i.test(msgContent)) {
+            foundMongoIdRegex = true;
+          }
+        }
+      }
+      expect(foundMongoIdRegex).toBe(true);
     })
 
-    test('?', () => {
-      expect(false).toBe(true);
-    })
+    // it('cancels with no participants', )....
+
+    // test('?', () => {
+    //   expect(false).toBe(true);
+    // })
 
   })
 

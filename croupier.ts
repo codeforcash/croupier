@@ -92,6 +92,12 @@ class Croupier {
   }
 
   public async shutdown() {
+    for(const snipe of Object.values(this.activeSnipes)) {
+      clearTimeout(snipe.timeout);
+      snipe.runClock = function() { };
+    }
+    this.activeSnipes = {};
+
     await this.bot1.deinit();
     await this.bot2.deinit();
   }

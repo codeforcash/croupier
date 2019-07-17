@@ -15,7 +15,6 @@
 
 5. Run the bot with `ts-node index.ts`
 
-
 ## Releases
 ### All releases should more or less be stable.
 
