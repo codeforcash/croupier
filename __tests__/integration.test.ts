@@ -93,7 +93,7 @@ describe('Betting Functionality', (): void => {
       const exitCode = await ringo.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername, "countdown:5");
       console.log('exitCode', exitCode);
       const readResponse = await paul.chat.read(channel);
-      await timeout(2000)
+      await timeout(5000)
       let foundMongoIdRegex = false;
       let messageWithinTest = false;
       for(const msg of readResponse.messages.reverse()) {
@@ -113,39 +113,39 @@ describe('Betting Functionality', (): void => {
       expect(foundMongoIdRegex).toBe(true);
     })
 
-    it('runs a snipe successfully', async () => {
-      jest.useFakeTimers()
-      const exitCode = await john.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername);
-      console.log('timeout?')
-      jest.advanceTimersByTime(20000)
-      console.log('timeout.');
-      console.log('running bal check')
-      let values;
-      const nbl = await croupier.checkWalletBalance(process.env.CROUPIER_RINGO_USERNAME);
-      expect(nbl).toEqual(123);
-      // const newRingoBalance = await ;
-      // console.log(newRingoBalance);
+    // it('runs a snipe successfully', async () => {
+    //   jest.useFakeTimers()
+    //   const exitCode = await john.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername);
+    //   console.log('timeout?')
+    //   jest.advanceTimersByTime(20000)
+    //   console.log('timeout.');
+    //   console.log('running bal check')
+    //   let values;
+    //   const nbl = await croupier.checkWalletBalance(process.env.CROUPIER_RINGO_USERNAME);
+    //   expect(nbl).toEqual(123);
+    //   // const newRingoBalance = await ;
+    //   // console.log(newRingoBalance);
 
 
-      // return Promise.all([
-      //   ,
-      //   croupier.checkWalletBalance(process.env.CROUPIER_JOHN_USERNAME)
-      // ]).then(async (values) => {
+    //   // return Promise.all([
+    //   //   ,
+    //   //   croupier.checkWalletBalance(process.env.CROUPIER_JOHN_USERNAME)
+    //   // ]).then(async (values) => {
 
-      //   console.log('bal check complete', values)
-      //   await timeout(1000 * 10);
-      //   const newRingoBalance = values[0];
-      //   const newJohnBalance = values[1];
-      //   let winnerPaid = false;
-      //   if(newRingoBalance > ringoBalance || newJohnBalance > johnBalance) {
-      //     winnerPaid = true;
-      //   }
-      //   expect(winnerPaid).toBe(true);
-      //   console.log('clearly we aint wait for the promise to complete');
+    //   //   console.log('bal check complete', values)
+    //   //   await timeout(1000 * 10);
+    //   //   const newRingoBalance = values[0];
+    //   //   const newJohnBalance = values[1];
+    //   //   let winnerPaid = false;
+    //   //   if(newRingoBalance > ringoBalance || newJohnBalance > johnBalance) {
+    //   //     winnerPaid = true;
+    //   //   }
+    //   //   expect(winnerPaid).toBe(true);
+    //   //   console.log('clearly we aint wait for the promise to complete');
 
-      // });
+    //   // });
 
-    });
+    // });
 
   })
 
