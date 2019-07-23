@@ -106,8 +106,33 @@ class Snipe {
     this.moneySend = (amount, recipient, extraParams = "") => {
       return new Promise((resolveMoneyThrottle) => {
         moneyThrottle(() => {
-          self.bot1.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient, extraParams);
-          resolveMoneyThrottle();
+
+          try {
+
+            self.bot1.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient, extraParams);
+            resolveMoneyThrottle();
+
+          } catch(e) {
+
+            self.bot1.chat.send({
+              name: `zackburt,${self.croupier.botUsername}`,
+              public: false,
+              topicType: 'chat'
+            }, {
+              body: `There was an error sending money
+
+              Snipe: ${self.snipeId}
+              Channel topic: ${channel.topicName}
+              Channel name: ${channel.name}
+              Amount: ${amount.toString()}
+              Recipient: ${recipient}
+              Extra Params: ${extraParams}
+
+              ERRORS: ${e}`
+            }, undefined);
+
+          }
+
         });
       });
     };
@@ -353,38 +378,52 @@ class Snipe {
     this.croupier.activeSnipes[JSON.stringify(this.channel)] = undefined;
   }
 
-  public sendAmountToWinner(winnerUsername: string, channel: ChatChannel): void {
+  public calculateSnipeBounty(): Promise<number> {
+
     let bounty: number = 0;
     const self = this;
 
-    const transactionFeePromises: Array<Promise<any>> = [];
+    return new Promise((resolve) => {
 
-    self.participants.forEach((participant) => {
-       bounty += parseFloat(participant.transaction.amount);
-       transactionFeePromises.push(self.croupier.calculateTransactionFees(participant.transaction));
-    });
+      const transactionFeePromises: Array<Promise<any>> = [];
 
-    Promise.all(transactionFeePromises).then((values: Array<number>) => {
-      values.forEach((val) => {
-        bounty -= val;
+      self.participants.forEach((participant) => {
+         bounty += parseFloat(participant.transaction.amount);
+         transactionFeePromises.push(self.croupier.calculateTransactionFees(participant.transaction));
       });
-      bounty = _.round(bounty, 7);
-      console.log("now rounded", bounty);
 
-      //  If winnerUsername is a participant in this chat, moneySend
-      //  Otherwise, use stellar.expert.xlm method
-      self.bot1.team.listTeamMemberships({
-        team: channel.name,
-      }).then((res) => {
+      Promise.all(transactionFeePromises).then((values: Array<number>) => {
+        values.forEach((val) => {
+          bounty -= val;
+        });
+        bounty = _.round(bounty, 7);
+        resolve(bounty);
+      });
 
-        let allMembers: Array<string> = [];
-        allMembers = allMembers.concat(res.members.owners.map((u) => u.username));
-        allMembers = allMembers.concat(res.members.admins.map((u) => u.username));
-        allMembers = allMembers.concat(res.members.writers.map((u) => u.username));
-        allMembers = allMembers.concat(res.members.readers.map((u) => u.username));
+    });
+  }
 
-        // it's possible the winner is not in the chat, that they won through a onBehalfOf contribution of someone else
-        if (allMembers.indexOf(winnerUsername) === -1) {
+  public sendAmountToWinner(winnerUsername: string, bounty: number, channel: ChatChannel): void {
+
+    const self = this;
+
+    //  If winnerUsername is a participant in this chat, moneySend
+    //  Otherwise, use stellar.expert.xlm method
+    self.bot1.team.listTeamMemberships({
+      team: channel.name,
+    }).then((res) => {
+
+      let allMembers: Array<string> = [];
+      allMembers = allMembers.concat(res.members.owners.map((u) => u.username));
+      allMembers = allMembers.concat(res.members.admins.map((u) => u.username));
+      allMembers = allMembers.concat(res.members.writers.map((u) => u.username));
+      allMembers = allMembers.concat(res.members.readers.map((u) => u.username));
+
+      // it's possible the winner is not in the chat, that they won through a onBehalfOf contribution of someone else
+      if (allMembers.indexOf(winnerUsername) === -1) {
+
+        try {
+
           self.bot1.wallet.send(winnerUsername, bounty.toString()).then((txn) => {
             let bountyMsg: string = `\`+${bounty}XLM@${winnerUsername}\` `;
             bountyMsg += `:arrow_right: `;
@@ -392,14 +431,35 @@ class Snipe {
             bountyMsg += `Please contact ${winnerUsername} and request they claim their winnings.`;
             self.chatSend(bountyMsg);
           });
-        } else {
-          self.moneySend(bounty, winnerUsername);
+
+        } catch(e) {
+
+
+          self.bot1.chat.send({
+            name: `zackburt,${self.croupier.botUsername}`,
+            public: false,
+            topicType: 'chat'
+          }, {
+            body: `There was an error sending money to a winner
+
+            Snipe: ${self.snipeId}
+            Winner: ${winnerUsername}
+            Amount: ${bounty.toString()}
+
+            ERRORS: ${e}`
+          }, undefined);
+
         }
-      });
+
+      } else {
+        self.moneySend(bounty, winnerUsername);
+      }
     });
+
   }
 
   public resolveFlip(winningNumber: number): string {
+    const self = this;
     let winnerUsername: string;
     const bettorRange: object = this.buildBettorRange();
     Object.keys(bettorRange).forEach((username) => {
@@ -407,8 +467,46 @@ class Snipe {
         winnerUsername = username;
       }
     });
-    this.sendAmountToWinner(winnerUsername, this.channel);
+
     this.chatSend(`Congrats to @${winnerUsername}`);
+
+
+    this.calculateSnipeBounty().then((bounty) => {
+
+      self.croupier.tabulateNetGains(winnerUsername, bounty, self.participants)
+        .then((winnerNetGains) => {
+
+          if(winnerNetGains < 5000) {
+
+            self.sendAmountToWinner(winnerUsername, bounty, self.channel);
+
+          } else {
+
+            const w9url = 'https://www.irs.gov/pub/irs-pdf/fw9.pdf';
+            const w8benurl = 'https://www.irs.gov/pub/irs-pdf/fw8ben.pdf';
+            const channelName = `zackburt,${self.croupier.botUsername},${winnerUsername}`;
+            const channel = {name: channelName, public: false, topicType: 'chat'};
+
+
+            self.bot1.chat.send(channel, {
+              body: `Congratulations on winning snipe ${self.snipeId} and the bounty ${bounty}
+
+              In order to send your winnings we must process a tax form.
+
+              If you live in the US, reply with this complete form: ${w9url}
+
+              If you live outside the US, reply with this complete form: ${w8benurl}`
+            }, undefined);
+
+          }
+
+      });
+
+    });
+
+
+
+
     return winnerUsername;
   }
 
@@ -654,12 +752,13 @@ class Snipe {
   public launchSnipe(): void {
     // Tell the channel: OK, your snipe has been accepted for routing.
     const self = this;
-    let message: string = `The snipe is on (**#${self.snipeId}**).  `;
+    let message: string = `The round has begun (**#${self.snipeId}**).  `;
     message += `Bet in multiples of 0.01XLM.  Betting format:`;
     message += `\`\`\`+0.01XLM@${self.croupier.botUsername}\`\`\``;
     message += `Minimum bet: 0.01XLM\n`;
     message += `Make 3 uninterrupted bets of **${this.displayFixedNice(self.blinds)}XLM**`;
     message += ` and receive a powerup!`;
+    message += `\n\n**Please ensure you have read the rules before making any bets**  https://github.com/codeforcash/croupier/blob/master/RULES.md`;
 
     self.chatSend(message);
 

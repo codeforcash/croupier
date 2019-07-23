@@ -8,13 +8,13 @@ Any player may initiate a sweepstakes by sending the Croupier XLM, amount being 
 
 ### Powerups
 
-If one enters the sweepstakes three times in a row, via bet above the minimum blinds, without any other participant or newcomer entering the snipe, then a powerup will be randomly awarded.  The initial blind is 0.01XLM and then 10 minutes in, and every 5 minutes thereafter, blinds are doubled.
+If one enters the sweepstakes three times in a row, via bet above the minimum blinds, without any other participant or newcomer entering the round, then a powerup will be randomly awarded.  The initial blind is 0.01XLM and then 10 minutes in, and every 5 minutes thereafter, blinds are doubled.
 
 ☢️: Go nuclear and play everyone's powerups in the order they were received
 
 🍧: For the next 10 seconds, powerups and bets are worthless and increase your position by 1
 
-🕺: o/` It's the final countdown!  Reset the clock to 1 minute
+🕺: o/\` It's the final countdown!  Reset the clock to 1 minute
 
 🏳️‍🌈: Level the playing field and reset everybody's positions to 1
 
@@ -46,12 +46,16 @@ Participants are then assigned a range of numbers in accordance to their positio
 
 ### Betting on behalf of someone else
 
-Anyone may enter a snipe on behalf of any other Keybase identity using this betting format:
+Anyone may enter a round on behalf of any other Keybase identity using this betting format:
 `+0.01XLM@croupier for:keybaseusername`.
 
 ### Maximum Pot Size
 
 Pot sizes are limited to 20,000 XLM.  The reason for this is to comply with legislation that limits sweepstakes sizes as well as legislation that requires certain sweepstakes prizes to be bonded.
+
+### Viewing Round Details and Historical Results
+
+There is not yet an API for this but we plan to make one available in the future.  For now, please direct inquiries regarding round histories to team@codefor.cash.
 
 ## Disclaimers and legal ideas
 
@@ -61,7 +65,7 @@ By sending money to Croupier, you release the operators of the Croupier software
 
 ### Payouts and refunds
 
-Snipes with only one participant are automatically cancelled and refunded.  Please note that all payouts and refunds are less the transaction fees accorded to the initial transaction.
+rounds with only one participant are automatically cancelled and refunded.  Please note that all payouts and refunds are less the transaction fees accorded to the initial transaction.
 
 ### Availability Limitations; Void Where Prohibited;  Eligibility requirements
 
@@ -96,12 +100,6 @@ Winners are liable for any and all taxes related to any prizes won
 Customer support is conducted via GitHub issues: https://github.com/codeforcash/croupier/issues
 
 If there are legitimate reasons to initiate a private request for support, then please DM @zackburt via Keybase.
-
-
-
-
-
-
 
 ## Operators
 

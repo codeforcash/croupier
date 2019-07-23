@@ -128,6 +128,51 @@ class Croupier {
     });
   }
 
+  public tabulateNetGains(winnerUsername: string, winnerTotal: number, participants: Array<IParticipant>): Promise<number> {
+    const self = this;
+    let netGains: object = {};
+    for(let participant of participants) {
+      if(typeof(netGains[participant.username])==='undefined') {
+        netGains[participant.username] = 0;
+      }
+      netGains[participant.username] -= participant.transaction.amount;
+    }
+    // Possible the winner was a free participant, someone contributed on their behalf, etc.
+    if(typeof(netGains[winnerUsername])==='undefined') {
+      netGains[winnerUsername] = 0;
+    }
+    netGains[winnerUsername] += winnerTotal;
+
+
+    return new Promise((resolve) => {
+
+      self.mongoDbClient = new mongodb.MongoClient(this.mongoDbUri, { reconnectTries: Number.MAX_VALUE,
+      reconnectInterval: 1000,
+      useNewUrlParser: true });
+      self.mongoDbClient.connect(err => {
+        const collection = self.mongoDbClient.db("croupier").collection("netGains");
+        collection.updateOne({}, { "$inc": netGains }, (err, res) => {
+          if (err) {
+            throw(err);
+          }
+
+          let projection = {};
+          projection[winnerUsername] = 1;
+
+          collection.findOne({}, projection).then((doc, err) => {
+            if (err || !doc) {
+              throw(err);
+            }
+
+            resolve(doc[winnerUsername]);
+            self.mongoDbClient.close();
+
+          });
+        })
+      });
+    });
+  }
+
   public documentSnipe(snipe: Snipe, reason: string): void {
 
     const self = this;
@@ -175,16 +220,37 @@ class Croupier {
 
   public processRefund(txn: Transaction, channel: ChatChannel): void {
 
+    const self = this;
     const snipe = this.activeSnipes[JSON.stringify(channel)];
+    let refund: number;
 
     console.log("refunding txn", txn);
     this.calculateTransactionFees(txn).then((transactionFees) => {
       console.log("not refunding txn fees", transactionFees);
-      const refund: number = _.round(txn.amount - transactionFees, 7);
+      refund = _.round(txn.amount - transactionFees, 7);
       console.log("total refund is", refund);
       snipe.moneySend(refund, txn.fromUsername);
     }).catch((e) => {
       console.log("there was an error with the refund", e);
+
+      self.bot1.chat.send({
+        name: `zackburt,${self.botUsername}`,
+        public: false,
+        topicType: 'chat'
+      }, {
+        body: `There was an error processing a refund
+
+        Snipe: ${snipe.snipeId}
+        Channel topic: ${channel.topicName}
+        Channel name: ${channel.name}
+        Amount: ${refund.toString()}
+        Recipient: ${txn.fromUsername}
+        Initial Txn Id: ${txn.txId}
+
+        ERRORS: ${e}`
+      }, undefined);
+
+
     });
   }
 
@@ -366,8 +432,9 @@ class Croupier {
     const channel = msg.channel;
     const helpMsg = `These messages are not monitored.
 
-    Have a question? Message @zackburt here on Keybase.
-    Filing a bug report or feature request?  Post on GitHub: https://github.com/codeforcash/croupier/issues/`;
+    Have some feedback?  Message @zackburt here on Keybase.
+    Filing a bug report or feature request?  Post on GitHub: https://github.com/codeforcash/croupier/issues/
+    Want to read the rules or start a game?  https://github.com/codeforcash/croupier/blob/master/RULES.md`;
 
     this.bot1.chat.send(channel,
       {

@@ -707,12 +707,15 @@ class Chat extends ClientBase {
       const child = child_process.spawn(`${croupierDirectory}/scripts/sendmoney.sh`,
         [team, topic, amount, recipient, extraParams, this._workingDir, this.homeDir]);
 
+      let errors = [];
+
       child.stdout.on('data', (data) => {
         console.log(`stdout: ${data}`);
       });
 
       child.stderr.on('data', (data) => {
         console.log(`stderr: ${data}`);
+        errors.push(data);
       });
 
       child.on('close', (code) => {
@@ -722,7 +725,8 @@ class Chat extends ClientBase {
 
       child.on('error', (err) => {
         console.log(`child process errored with err ${err}`);
-        throw err;
+        errors.push(err);
+        throw JSON.stringify(errors);
       });
 
     });
