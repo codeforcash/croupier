@@ -103,10 +103,10 @@ class Snipe {
     }
 
     const moneyThrottle: any = throttledQueue(1, 1000);
-    this.moneySend = (amount, recipient) => {
+    this.moneySend = (amount, recipient, extraParams = "") => {
       return new Promise((resolveMoneyThrottle) => {
         moneyThrottle(() => {
-          self.bot1.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient);
+          self.bot1.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient, extraParams);
           resolveMoneyThrottle();
         });
       });
@@ -524,39 +524,6 @@ class Snipe {
     });
   }
 
-  public checkWalletBalance(username: string): Promise<any> {
-    let balance: number = 0;
-    const self = this;
-    return new Promise((resolve, reject) => {
-
-      try {
-
-        self.bot1.wallet.lookup(username).then((acct) => {
-          console.log(acct);
-          self.bot1.wallet.balances(acct.accountId).then((balances) => {
-            console.log(balances);
-            balances.forEach((acctDetail) => {
-              console.log(acctDetail.balance[0].amount);
-              balance += parseFloat(acctDetail.balance[0].amount);
-            });
-            resolve(balance);
-          }).catch((e) => {
-            console.log(e);
-            reject(e);
-          });
-        }).catch((e) => {
-          console.log(e);
-          reject(e);
-        });
-
-      } catch (e) {
-        console.log(e);
-        reject(e);
-      }
-
-    });
-  }
-
   public processNewBet(txn: Transaction, msg: MessageSummary): Promise<boolean> {
     const channel: ChatChannel = msg.channel;
     const onBehalfOfMatch: Array<any> = msg.content.text.body.match(/(for|4):?\s?@?(\w+@?(\w+)?)/i);
@@ -583,7 +550,7 @@ class Snipe {
     // check if the onBehalfOf user already has a wallet with bot.wallet.lookup(username);
     // if not, restrict the onBehalfOf wager to >= 2.01XLM, Keybase's minimum xfer for
     // new wallets
-    self.checkWalletBalance(recipient).then((balance) => {
+    self.croupier.checkWalletBalance(recipient).then((balance) => {
       if (balance === null || balance < 2.01) {
         if (txn.amount < 2.02) {
           let sassyMessage: string = `Betting on behalf of ${recipient}?  `;
@@ -907,7 +874,7 @@ class Snipe {
     if (blinds !== this.blinds) {
       this.blinds = blinds;
       this.croupier.updateSnipeLog(this.channel);
-      this.chatSend(`Blinds are raised. Minimum bets to receive powerup: **${this.displayFixedNice(blinds)}XLM**`);
+      this.chatSend(`Blinds are raised. Minimum bet to receive powerup: **${this.displayFixedNice(blinds)}XLM**`);
     }
   }
 

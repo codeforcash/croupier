@@ -93,13 +93,39 @@ class Croupier {
 
   public async shutdown() {
     for(const snipe of Object.values(this.activeSnipes)) {
-      clearTimeout(snipe.timeout);
-      snipe.runClock = function() { };
+      try {
+        clearTimeout(snipe.timeout);
+        snipe.runClock = function() { };
+      } catch(e) {
+
+      }
     }
     this.activeSnipes = {};
 
     await this.bot1.deinit();
     await this.bot2.deinit();
+  }
+
+  public checkWalletBalance(username: string): Promise<any> {
+    let balance: number = 0;
+    const self = this;
+    return new Promise(async (resolve) => {
+      try {
+        const acct = await self.bot1.wallet.lookup(username);
+        console.log("acct", acct);
+        const balances = await self.bot2.wallet.balances(acct.accountId);
+        console.log("balances", balances);
+        balances.forEach((acctDetail) => {
+          console.log(acctDetail.balance[0].amount);
+          balance += parseFloat(acctDetail.balance[0].amount);
+        });
+        resolve(balance);
+      } catch (e) {
+        console.log(e);
+        throw e;
+      }
+
+    });
   }
 
   public documentSnipe(snipe: Snipe, reason: string): void {
@@ -274,13 +300,18 @@ class Croupier {
     } else {
 
 
-      //  Calculate pot size.
-      //  If pot size + this bet >= 2500 USD, refund the bet
-      //  Say the maximum pot size is $2500 USD to comply
-      //  with various legal ideas
+      const currentPotSize: number = snipe.calculatePotSize();
+      const thisBetSize: number = txn.amount;
+      if(currentPotSize + thisBetSize >= 20000) {
 
-      // Ignore all bets below the minimum
+        snipe.chatSend(`In order to make Croupier available within as many international territories as possible,
+          pot sizes are limited to 20,000 XLM`);
+        setTimeout(() => {
+          this.processRefund(txn, channel);
+        }, 1000 * 5);
+        return;
 
+      }
 
 
       if (snipe.betting_open === false) {
@@ -330,10 +361,34 @@ class Croupier {
     });
   }
 
+  private respondToDM(msg): void {
+
+    const channel = msg.channel;
+    const helpMsg = `These messages are not monitored.
+
+    Have a question? Message @zackburt here on Keybase.
+    Filing a bug report or feature request?  Post on GitHub: https://github.com/codeforcash/croupier/issues/`;
+
+    this.bot1.chat.send(channel,
+      {
+        body: helpMsg,
+      }
+    );
+
+  }
+
   private routeIncomingMessage(msg): void {
 
+    const self = this;
     try {
       const snipe: Snipe = this.activeSnipes[JSON.stringify(msg.channel)];
+
+
+      if(msg.channel.membersType === 'impteamnative') {
+        this.respondToDM(msg);
+        return;
+      }
+
       if (typeof(snipe) !== "undefined" &&
         snipe.freeze &&
         msg.sender.username !== snipe.freeze) {

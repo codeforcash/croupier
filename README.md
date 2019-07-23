@@ -15,6 +15,10 @@
 
 5. Run the bot with `ts-node index.ts`
 
+## Contributing
+
+Contributions are welcome.  Any new features should be accompanied by a test.  To run the test suite, `yarn test --detectOpenHandles --verbose --forceExit`
+
 ## Releases
 ### All releases should more or less be stable.
 
