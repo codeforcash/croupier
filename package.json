@@ -29,18 +29,17 @@
       "tslint"
     ],
     "*.{json,md}": [
-      "prettier --write",
-      "git add"
+      "prettier --write"
     ]
   },
   "author": "Zack Burt <zack@codefor.cash>",
   "dependencies": {
-    "@types/lodash": "^4.14.134",
-    "@types/node": "^12.0.7",
+    "@types/lodash": "^4.14.136",
+    "@types/node": "^12.6.8",
     "alasql": "^0.4.11",
     "axios": "^0.19.0",
     "forever": "^1.0.0",
-    "lodash": "^4.17.11",
+    "lodash": "^4.17.15",
     "lodash.camelcase": "^4.3.0",
     "lodash.kebabcase": "^4.1.1",
     "lodash.snakecase": "^4.1.1",
@@ -50,14 +49,14 @@
     "prettier": "^1.18.2",
     "source-map-support": "^0.5.12",
     "throttled-queue": "^1.0.5",
-    "typescript": "^3.5.1"
+    "typescript": "^3.5.3"
   },
   "devDependencies": {
-    "@babel/preset-env": "^7.5.4",
+    "@babel/preset-env": "^7.5.5",
     "@types/jest": "^24.0.15",
     "eslint": "^5.16.0",
-    "eslint-config-airbnb-base": "^13.1.0",
-    "eslint-plugin-import": "^2.17.3",
+    "eslint-config-airbnb-base": "^13.2.0",
+    "eslint-plugin-import": "^2.18.2",
     "husky": ">=1",
     "jest": "^24.8.0",
     "lint-staged": ">=8",
