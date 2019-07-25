@@ -28,6 +28,13 @@ If one enters the sweepstakes three times in a row, via bet above the minimum bl
 
 🗡: Your position size has an even chance of doubling/halving
 
+#### Viewing someone else's powerups
+
+* Using the .powerups command you may see your own powerups.  The fee is 1 position.
+* Using the .powerups {username} you may see another user's powerups.  The fee is 10 position.
+
+"Pup shorthand": one may type `:dog:` instead of `.powerups`.
+
 ### No purchase necessary
 
 By reacting, within Keybase, to one of Croupier’s messages regarding an individual round, with one of the following reactions, Croupier will grant a complimentary entry, of position size 1:
@@ -36,13 +43,15 @@ By reacting, within Keybase, to one of Croupier’s messages regarding an indivi
 
 ### How someone wins
 
-When a game of Croupier begins, a 60 second countdown clock begins.  Whenever a new bet is added to the pot, there is a clock adjustment.  If the time remaining is less than 30 seconds, the clock is reset to 60 seconds.  If more than 30 seconds remain, 10 seconds are added to the clock.  The clock may be adjusted through the use of powerups as well.
+When a game of Croupier begins, a 60 second countdown clock begins. [1] Whenever a new bet is added to the pot, there is a clock adjustment.  If the time remaining is less than 30 seconds, the clock is reset to 60 seconds.  If more than 30 seconds remain, 10 seconds are added to the clock.  The clock may be adjusted through the use of powerups as well.
 
 When there are 0 seconds left on the clock, no more bets are accepted.
 
 Free entries grant additional position size of 1; paid entries grant additional position size of bet size divided by 0.01 (e.g. 100 position for a 1 XLM bet).  Position sizes may also be affected by use or other participants’ use of powerups.
 
 Participants are then assigned a range of numbers in accordance to their position size.  A random number, between 1 and the cumulative total of positions, is then publicly generated through Keybase’s flip functionality.  The participant whose range contains said random number is then awarded the pot total less any transaction fees.
+
+[1] Note: Croupier accepts a custom `countdown` param when launching new rounds.  e.g., if the round is begun with `+0.01XLM@croupier countdown:180` then the initial countdown is set to 180 seconds.
 
 ### Betting on behalf of someone else
 

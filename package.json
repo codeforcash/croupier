@@ -19,14 +19,9 @@
   "scripts": {
     "test": "jest --runInBand"
   },
-  "husky": {
-    "hooks": {
-      "pre-commit": "lint-staged"
-    }
-  },
   "lint-staged": {
     "*.ts": [
-      "eslint --fix"
+      "tslint --fix"
     ],
     "*.{json,md,ts}": [
       "prettier --write",

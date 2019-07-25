@@ -1,9 +1,10 @@
+import axios, { AxiosPromise, AxiosRequestConfig } from "axios";
 import * as _ from "lodash";
 import * as moment from "moment";
+import * as mongodb from "mongodb";
 import * as os from "os";
 import * as throttledQueue from "throttled-queue";
 import * as Bot from "./keybase-bot";
-import * as mongodb from "mongodb";
 import Snipe from "./snipe";
 
 import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
@@ -38,7 +39,6 @@ class Croupier {
                      mongoDbHost,
                      isCluster) {
 
-
     let mongoDbDatabase;
     if (process.env.TEST) {
       mongoDbDatabase = "testcroupier";
@@ -58,7 +58,6 @@ class Croupier {
     uri += `/${mongoDbDatabase}?retryWrites=true&w=majority`;
     this.mongoDbUri = uri;
 
-
     this.botUsername = botUsername;
 
     this.bot1 = new Bot(os.homedir());
@@ -76,12 +75,11 @@ class Croupier {
 
   public async run(loadActiveSnipes) {
 
-
-    if(!this.bot1._service.initialized) {
+    if (!this.bot1._service.initialized) {
       await this.init();
     }
 
-    if(loadActiveSnipes) {
+    if (loadActiveSnipes) {
       this.activeSnipes = await this.loadActiveSnipes();
       console.log("active snipes loaded");
     }
@@ -92,11 +90,11 @@ class Croupier {
   }
 
   public async shutdown() {
-    for(const snipe of Object.values(this.activeSnipes)) {
+    for (const snipe of Object.values(this.activeSnipes)) {
       try {
         clearTimeout(snipe.timeout);
         snipe.runClock = function() { };
-      } catch(e) {
+      } catch (e) {
 
       }
     }
@@ -106,69 +104,82 @@ class Croupier {
     await this.bot2.deinit();
   }
 
-  public checkWalletBalance(username: string): Promise<any> {
-    let balance: number = 0;
+  public async checkWalletBalance(username: string): Promise<any> {
+    const balance: number = 0;
     const self = this;
     return new Promise(async (resolve) => {
-      try {
-        const acct = await self.bot1.wallet.lookup(username);
-        console.log("acct", acct);
-        const balances = await self.bot2.wallet.balances(acct.accountId);
-        console.log("balances", balances);
-        balances.forEach((acctDetail) => {
-          console.log(acctDetail.balance[0].amount);
-          balance += parseFloat(acctDetail.balance[0].amount);
-        });
-        resolve(balance);
-      } catch (e) {
+
+      self.bot1.wallet.lookup(username).then((acct) => {
+
+        axios.get(`https://horizon.stellar.org/accounts/${acct.accountId}`)
+          .then((res) => {
+            let balance = 0;
+            res.data.balances.forEach((acct) => {
+              balance += acct.balance;
+            });
+            resolve(balance);
+          }).catch((e) => {
+            console.log(e);
+            throw e;
+          });
+
+      }).catch((e) => {
         console.log(e);
         throw e;
-      }
+      });
 
     });
   }
 
   public tabulateNetGains(winnerUsername: string, winnerTotal: number, participants: Array<IParticipant>): Promise<number> {
     const self = this;
-    let netGains: object = {};
-    for(let participant of participants) {
-      if(typeof(netGains[participant.username])==='undefined') {
+    const netGains: object = {};
+    for (const participant of participants) {
+      if (typeof(netGains[participant.username]) === "undefined") {
         netGains[participant.username] = 0;
       }
       netGains[participant.username] -= participant.transaction.amount;
     }
     // Possible the winner was a free participant, someone contributed on their behalf, etc.
-    if(typeof(netGains[winnerUsername])==='undefined') {
+    if (typeof(netGains[winnerUsername]) === "undefined") {
       netGains[winnerUsername] = 0;
     }
     netGains[winnerUsername] += winnerTotal;
 
+    console.log("netGains", netGains);
 
     return new Promise((resolve) => {
 
       self.mongoDbClient = new mongodb.MongoClient(this.mongoDbUri, { reconnectTries: Number.MAX_VALUE,
       reconnectInterval: 1000,
       useNewUrlParser: true });
-      self.mongoDbClient.connect(err => {
+      self.mongoDbClient.connect((err) => {
         const collection = self.mongoDbClient.db("croupier").collection("netGains");
-        collection.updateOne({}, { "$inc": netGains }, (err, res) => {
+        collection.updateOne({}, { $inc: netGains }, (err, res) => {
           if (err) {
+            console.log("updateOne err", err);
             throw(err);
           }
 
-          let projection = {};
+          console.log("updateOne res", res);
+
+          const projection = {};
           projection[winnerUsername] = 1;
 
           collection.findOne({}, projection).then((doc, err) => {
             if (err || !doc) {
+
+              console.log("findOne err", err);
               throw(err);
             }
+
+            console.log("findOne doc", doc);
 
             resolve(doc[winnerUsername]);
             self.mongoDbClient.close();
 
           });
-        })
+        });
       });
     });
   }
@@ -194,26 +205,25 @@ class Croupier {
 
     const newvalues = {
       $set: {
-        winner: winner,
+        winner,
         was_cancelled: wasCancelled,
         cancellation_reason: cancellationReason,
         in_progress: 0,
         updated_at: +new Date(),
-      }
+      },
     };
-
 
     self.mongoDbClient = new mongodb.MongoClient(this.mongoDbUri, { reconnectTries: Number.MAX_VALUE,
       reconnectInterval: 1000,
       useNewUrlParser: true });
-    self.mongoDbClient.connect(err => {
+    self.mongoDbClient.connect((err) => {
       const collection = self.mongoDbClient.db("croupier").collection("snipes");
       collection.updateOne(myquery, newvalues, (err, res) => {
         if (err) {
           throw(err);
         }
         self.mongoDbClient.close();
-      })
+      });
     });
 
   }
@@ -236,7 +246,7 @@ class Croupier {
       self.bot1.chat.send({
         name: `zackburt,${self.botUsername}`,
         public: false,
-        topicType: 'chat'
+        topicType: "chat",
       }, {
         body: `There was an error processing a refund
 
@@ -247,9 +257,8 @@ class Croupier {
         Recipient: ${txn.fromUsername}
         Initial Txn Id: ${txn.txId}
 
-        ERRORS: ${e}`
+        ERRORS: ${e}`,
       }, undefined);
-
 
     });
   }
@@ -280,26 +289,26 @@ class Croupier {
     const myquery = { _id: snipe.snipeId };
     const newvalues = {
       $set: {
-        participants: participants,
+        participants,
         position_sizes: positionSizes,
-        blinds: blinds,
+        blinds,
         pot_size: snipe.calculatePotSize(),
         clock_remaining: snipe.getTimeLeft(),
-        updated_at: +new Date()
-      }
+        updated_at: +new Date(),
+      },
     };
 
     self.mongoDbClient = new mongodb.MongoClient(this.mongoDbUri, { reconnectTries: Number.MAX_VALUE,
       reconnectInterval: 1000,
       useNewUrlParser: true });
-    self.mongoDbClient.connect(err => {
+    self.mongoDbClient.connect((err) => {
       const collection = self.mongoDbClient.db("croupier").collection("snipes");
       collection.updateOne(myquery, newvalues, (err, res) => {
         if (err) {
           throw(err);
         }
         self.mongoDbClient.close();
-      })
+      });
     });
 
   }
@@ -312,13 +321,13 @@ class Croupier {
       self.mongoDbClient = new mongodb.MongoClient(self.mongoDbUri, { reconnectTries: Number.MAX_VALUE,
       reconnectInterval: 1000,
       useNewUrlParser: true });
-      self.mongoDbClient.connect(err => {
+      self.mongoDbClient.connect((err) => {
         const collection = self.mongoDbClient.db("croupier").collection("snipes");
         collection.insertOne({
           channel: snipe.channel,
           countdown: snipe.countdown,
           betting_started: snipe.betting_started,
-          in_progress: 1
+          in_progress: 1,
         }, (err, res) => {
           if (err) {
             console.log(err);
@@ -326,7 +335,7 @@ class Croupier {
           }
           self.mongoDbClient.close();
           resolve(res.insertedId);
-        })
+        });
       });
     });
 
@@ -353,7 +362,6 @@ class Croupier {
       return;
     }
 
-
     if (parseFloat(txn.amount) < 0.01) {
       this.bot1.chat.send(channel, {
         body: `Thanks for the tip, but bets should be >= 0.01XLM`,
@@ -365,10 +373,9 @@ class Croupier {
       this.startNewSnipe(msg, txn);
     } else {
 
-
       const currentPotSize: number = snipe.calculatePotSize();
       const thisBetSize: number = txn.amount;
-      if(currentPotSize + thisBetSize >= 20000) {
+      if (currentPotSize + thisBetSize >= 20000) {
 
         snipe.chatSend(`In order to make Croupier available within as many international territories as possible,
           pot sizes are limited to 20,000 XLM`);
@@ -378,7 +385,6 @@ class Croupier {
         return;
 
       }
-
 
       if (snipe.betting_open === false) {
         snipe.chatSend(`Betting has closed - refunding`);
@@ -439,7 +445,7 @@ class Croupier {
     this.bot1.chat.send(channel,
       {
         body: helpMsg,
-      }
+      },
     );
 
   }
@@ -450,8 +456,7 @@ class Croupier {
     try {
       const snipe: Snipe = this.activeSnipes[JSON.stringify(msg.channel)];
 
-
-      if(msg.channel.membersType === 'impteamnative') {
+      if (msg.channel.membersType === "impteamnative") {
         this.respondToDM(msg);
         return;
       }
@@ -501,7 +506,7 @@ class Croupier {
         reconnectInterval: 1000,
         useNewUrlParser: true });
 
-      self.mongoDbClient.connect(err => {
+      self.mongoDbClient.connect((err) => {
         if (err) {
           throw(err);
         }
@@ -526,12 +531,11 @@ class Croupier {
               participants: JSON.parse(result.participants),
               position_sizes: JSON.parse(result.position_sizes),
               potSize: parseInt(result.potSize, 10),
-              snipeId: result._id
+              snipeId: result._id,
             });
           });
 
           self.mongoDbClient.close();
-
 
           Object.keys(snipes).forEach((chid) => {
             const snipeChannel: ChatChannel = JSON.parse(chid);

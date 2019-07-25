@@ -19,6 +19,8 @@
 
 Contributions are welcome.  Any new features should be accompanied by a test.  To run the test suite, `yarn test --detectOpenHandles --verbose --forceExit`
 
+Note: run `killall keybase` and `keybase ctl stop` before running test suite
+
 ## Releases
 ### All releases should more or less be stable.
 
