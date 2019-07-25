@@ -19,16 +19,17 @@
   "scripts": {
     "test": "jest --runInBand"
   },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
   "lint-staged": {
     "*.ts": [
-      "tslint --fix"
+      "tslint"
     ],
-    "*.{json,md,ts}": [
+    "*.{json,md}": [
       "prettier --write",
-      "git add"
-    ],
-    "*.js": [
-      "eslint --fix",
       "git add"
     ]
   },
@@ -46,6 +47,7 @@
     "mkdirp": "0.5.1",
     "moment": "^2.24.0",
     "mongodb": "^3.2.7",
+    "prettier": "^1.18.2",
     "source-map-support": "^0.5.12",
     "throttled-queue": "^1.0.5",
     "typescript": "^3.5.1"

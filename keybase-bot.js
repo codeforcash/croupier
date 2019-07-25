@@ -1,24 +1,26 @@
-'use strict';
 
-function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
 
-var snakeCase = _interopDefault(require('lodash.snakecase'));
-var camelCase = _interopDefault(require('lodash.camelcase'));
-var kebabCase = _interopDefault(require('lodash.kebabcase'));
-var os = _interopDefault(require('os'));
-var crypto = _interopDefault(require('crypto'));
-var child_process = require('child_process');
-var readline = _interopDefault(require('readline'));
-var mkdirp = _interopDefault(require('mkdirp'));
-var util = require('util');
-var fs = require('fs');
-var fs__default = _interopDefault(fs);
-var path = _interopDefault(require('path'));
-
-if(process.env.DEVELOPMENT == 'true') {
-  var croupierDirectory = '.';
+function _interopDefault(ex) {
+  return ex && typeof ex === 'object' && 'default' in ex ? ex.default : ex;
 }
-else {
+
+const snakeCase = _interopDefault(require('lodash.snakecase'));
+const camelCase = _interopDefault(require('lodash.camelcase'));
+const kebabCase = _interopDefault(require('lodash.kebabcase'));
+const os = _interopDefault(require('os'));
+const crypto = _interopDefault(require('crypto'));
+const child_process = require('child_process');
+const readline = _interopDefault(require('readline'));
+const mkdirp = _interopDefault(require('mkdirp'));
+const util = require('util');
+const fs = require('fs');
+
+const fs__default = _interopDefault(fs);
+const path = _interopDefault(require('path'));
+
+if (process.env.DEVELOPMENT == 'true') {
+  var croupierDirectory = '.';
+} else {
   var croupierDirectory = '/home/keybase/croupier';
 }
 /**
@@ -34,30 +36,25 @@ else {
 function formatAPIObjectInput(obj, apiType) {
   if (obj === null || obj === undefined || typeof obj !== 'object') {
     return obj;
-  } else if (Array.isArray(obj)) {
+  } if (Array.isArray(obj)) {
     return obj.map(item => formatAPIObjectInput(item, apiType));
-  } else {
-    return Object.keys(obj).reduce((newObj, key) => {
-      // TODO: hopefully we standardize how the Keybase API handles input keys
-      let formattedKey;
-
-      if (apiType === 'wallet') {
-        formattedKey = kebabCase(key);
-      } else {
-        formattedKey = snakeCase(key);
-      }
-
-      if (typeof obj[key] === 'object') {
-        return { ...newObj,
-          [formattedKey]: formatAPIObjectInput(obj[key], apiType)
-        };
-      }
-
-      return { ...newObj,
-        [formattedKey]: obj[key]
-      };
-    }, {});
   }
+  return Object.keys(obj).reduce((newObj, key) => {
+    // TODO: hopefully we standardize how the Keybase API handles input keys
+    let formattedKey;
+
+    if (apiType === 'wallet') {
+      formattedKey = kebabCase(key);
+    } else {
+      formattedKey = snakeCase(key);
+    }
+
+    if (typeof obj[key] === 'object') {
+      return { ...newObj, [formattedKey]: formatAPIObjectInput(obj[key], apiType) };
+    }
+
+    return { ...newObj, [formattedKey]: obj[key] };
+  }, {});
 }
 /*
  * An internal blacklist of parent levels at which formatAPIObjectOutput transformations
@@ -66,13 +63,12 @@ function formatAPIObjectInput(obj, apiType) {
 
 const transformsBlacklist = {
   chat: {
-    read: [['messages', null, 'msg', 'reactions', 'reactions', null]]
-  }
+    read: [['messages', null, 'msg', 'reactions', 'reactions', null]],
+  },
   /**
    * Context of the object formatting process.
    * @ignore
    */
-
 };
 
 /*
@@ -92,7 +88,6 @@ function matchBlacklist(context) {
     if (matcher.length !== parentLength) {
       continue;
     } // Iterate over the items of the matcher
-
 
     let mismatch = false;
 
@@ -122,14 +117,12 @@ function matchBlacklist(context) {
  * @returns - A new context.
  */
 
-
 function buildContext(context, key) {
   if (!context) {
     return context;
   }
 
-  const copiedContext = { ...context
-  };
+  const copiedContext = { ...context };
 
   if (!copiedContext.parent) {
     copiedContext.parent = [key];
@@ -151,40 +144,33 @@ function buildContext(context, key) {
   * console.log(outputRes) // {unreadOnly: true}
  */
 
-
 function formatAPIObjectOutput(obj, context) {
   if (obj == null || typeof obj !== 'object') {
     return obj;
-  } else if (Array.isArray(obj)) {
+  } if (Array.isArray(obj)) {
     return obj.map((item, i) => formatAPIObjectOutput(item, buildContext(context, i)));
-  } else {
-    return Object.keys(obj).reduce((newObj, key) => {
-      const formattedKey = matchBlacklist(context) ? key : camelCase(key);
-
-      if (typeof obj[key] === 'object') {
-        return { ...newObj,
-          [formattedKey]: formatAPIObjectOutput(obj[key], buildContext(context, key))
-        };
-      }
-
-      return { ...newObj,
-        [formattedKey]: obj[key]
-      };
-    }, {});
   }
+  return Object.keys(obj).reduce((newObj, key) => {
+    const formattedKey = matchBlacklist(context) ? key : camelCase(key);
+
+    if (typeof obj[key] === 'object') {
+      return { ...newObj, [formattedKey]: formatAPIObjectOutput(obj[key], buildContext(context, key)) };
+    }
+
+    return { ...newObj, [formattedKey]: obj[key] };
+  }, {});
 }
 
-
-
-
-
-
-
-const keybaseExec = (workingDir, homeDir, args, options = {
-  stdinBuffer: undefined,
-  onStdOut: undefined,
-  timeout: undefined
-}) => {
+const keybaseExec = (
+  workingDir,
+  homeDir,
+  args,
+  options = {
+    stdinBuffer: undefined,
+    onStdOut: undefined,
+    timeout: undefined,
+  },
+) => {
   const runArgs = [...args];
 
   if (homeDir) {
@@ -202,20 +188,19 @@ const keybaseExec = (workingDir, homeDir, args, options = {
 
   child.stdin.end();
   const lineReaderStdout = readline.createInterface({
-    input: child.stdout
+    input: child.stdout,
   }); // Use readline interface to parse each line (\n separated) when provided
   // with onStdOut callback
 
   if (options.onStdOut) {
     lineReaderStdout.on('line', options.onStdOut);
   } else {
-    child.stdout.on('data', chunk => {
+    child.stdout.on('data', (chunk) => {
       stdOutBuffer.push(chunk);
     });
   } // Capture STDERR and use as error message if needed
 
-
-  child.stderr.on('data', chunk => {
+  child.stderr.on('data', (chunk) => {
     stdErrBuffer.push(chunk);
   });
   let done = false;
@@ -229,7 +214,7 @@ const keybaseExec = (workingDir, homeDir, args, options = {
   }
 
   return new Promise((resolve, reject) => {
-    child.on('close', code => {
+    child.on('close', (code) => {
       done = true;
       let finalStdOut = null; // Pass back
 
@@ -294,18 +279,17 @@ async function rmdirRecursive(dirName) {
  */
 async function keybaseStatus(workingDir, homeDir) {
   const status = await keybaseExec(workingDir, homeDir, ['status', '--json'], {
-    json: true
+    json: true,
   });
 
   if (status && status.Username && status.Device && status.Device.name) {
     return {
       username: status.Username,
       devicename: status.Device.name,
-      homeDir
+      homeDir,
     };
-  } else {
-    throw new Error('Failed to get current username and device name.');
   }
+  throw new Error('Failed to get current username and device name.');
 }
 
 /**
@@ -321,7 +305,7 @@ async function pingKeybaseService(workingDir, homeDir) {
   // TODO: use a faster technique when core releases one
   try {
     await keybaseExec(workingDir, homeDir, ['--no-auto-fork', 'status', '--json'], {
-      json: true
+      json: true,
     });
     return true;
   } catch (err) {
@@ -338,9 +322,7 @@ const aExec = util.promisify(child_process.exec);
  */
 
 async function whichKeybase() {
-  const {
-    stdout
-  } = await aExec('which keybase');
+  const { stdout } = await aExec('which keybase');
 
   if (!stdout || !stdout.trim().length) {
     throw new Error('Could not find keybase binary');
@@ -351,7 +333,7 @@ async function whichKeybase() {
 }
 
 function timeout(time) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     setTimeout(() => {
       resolve();
     }, time);
@@ -375,7 +357,7 @@ class Service {
 
     if (!paperkey || typeof paperkey !== 'string') {
       // Don't want to accidentally print the paperkey to STDERR.
-      throw new Error(`Please provide a paperkey to initialize the bot.`);
+      throw new Error('Please provide a paperkey to initialize the bot.');
     }
 
     if (this.initialized) {
@@ -391,7 +373,7 @@ class Service {
     try {
       await this.startupService();
       await keybaseExec(this.workingDir, this.homeDir, ['oneshot', '--username', username], {
-        stdinBuffer: paperkey
+        stdinBuffer: paperkey,
       }); // Set the typing notification settings for the bot
 
       await keybaseExec(this.workingDir, this.homeDir, ['chat', 'notification-settings', 'disable-typing', this.disableTyping.toString()]);
@@ -442,7 +424,6 @@ class Service {
       await keybaseExec(this.workingDir, this.homeDir, ['ctl', 'stop', '--shutdown']);
     } catch (e) {} // wait until the process quits by watching the running property
 
-
     let i = 0;
 
     while (true) {
@@ -463,7 +444,6 @@ class Service {
       throw new Error('Cannot deinitialize an uninitialized bot.');
     } // If we init the bot using paperkey credentials, then we want to stop the service and remove our generated directory.
 
-
     if (this.initialized === 'paperkey') {
       await this._killCustomService();
     }
@@ -478,7 +458,7 @@ class Service {
         devicename: this.devicename,
         homeDir: this.homeDir ? this.homeDir : undefined,
         botLite: this.botLite,
-        disableTyping: this.disableTyping
+        disableTyping: this.disableTyping,
       };
     }
 
@@ -492,7 +472,6 @@ class Service {
    * @example
    * service.startupService()
    */
-
 
   async startupService() {
     const args = ['service'];
@@ -510,11 +489,11 @@ class Service {
     }
 
     const child = child_process.spawn(path.join(this.workingDir, 'keybase'), args, {
-      env: process.env
+      env: process.env,
     }); // keep track of the subprocess' state
 
     this.running = true;
-    child.on('exit', async code => {
+    child.on('exit', async (code) => {
       this.running = false;
 
       if (code !== 0 && this.autoLogSendOnCrash) {
@@ -522,9 +501,9 @@ class Service {
       }
     });
     return new Promise(async (resolve, reject) => {
-      child.on('close', code => {
+      child.on('close', (code) => {
         // any code here including 0 is bad here, if it happens before resolve
-        //, since this service should stay running
+        // , since this service should stay running
         reject(new Error(`keybase service exited with code ${code} (${this.workingDir})`));
       }); // Wait for the service to start up - give it 10s.
 
@@ -551,7 +530,7 @@ class Service {
 
         if (this.initialized === 'paperkey' && this.username) {
           await keybaseExec(this.workingDir, this.homeDir, ['oneshot', '--username', this.username], {
-            stdinBuffer: this._paperkey
+            stdinBuffer: this._paperkey,
           });
         }
       } catch (e) {}
@@ -572,13 +551,12 @@ initialized: ${this.initialized || 'false'}`;
       await this._killCustomService();
     }
   }
-
 }
 
 const API_VERSIONS = {
   chat: 1,
   team: 1,
-  wallet: 1
+  wallet: 1,
 };
 
 /**
@@ -613,8 +591,8 @@ class ClientBase {
       method: arg.method,
       params: {
         version: API_VERSIONS[arg.apiName],
-        options
-      }
+        options,
+      },
     };
     const inputString = JSON.stringify(input);
 
@@ -624,7 +602,7 @@ class ClientBase {
     const output = await keybaseExec(this._workingDir, this.homeDir, [arg.apiName, 'api'], {
       stdinBuffer: Buffer.alloc(size, inputString, 'utf8'),
       json: true,
-      timeout: arg.timeout
+      timeout: arg.timeout,
     });
 
     if (output.hasOwnProperty('error')) {
@@ -633,7 +611,7 @@ class ClientBase {
 
     const res = formatAPIObjectOutput(output.result, {
       apiName: arg.apiName,
-      method: arg.method
+      method: arg.method,
     });
     return res;
   }
@@ -647,17 +625,13 @@ class ClientBase {
   _pathToKeybaseBinary() {
     return path.join(this._workingDir, 'keybase');
   }
-
 }
 
 /** The chat module of your Keybase bot. For more info about the API this module uses, you may want to check out `keybase chat api`. */
 class Chat extends ClientBase {
-
-
   // Custom function that returns more information than the keybase-bot method,
   // which doesn't provide error data nicely.
   getFlipData(conversationId, flipConversationId, msgId, gameId) {
-
     console.log('working dir and homedir:');
     console.log(this._workingDir);
     console.log(this.homeDir);
@@ -665,12 +639,17 @@ class Chat extends ClientBase {
     const stdout = [];
     const stderr = [];
 
-    const child = child_process.spawn(`${croupierDirectory}/scripts/getflipdata.sh`,
-      [conversationId, flipConversationId, msgId, gameId, this._workingDir, this.homeDir]);
+    const child = child_process.spawn(`${croupierDirectory}/scripts/getflipdata.sh`, [
+      conversationId,
+      flipConversationId,
+      msgId,
+      gameId,
+      this._workingDir,
+      this.homeDir,
+    ]);
 
-    return new Promise(resolve => {
-
-     child.stdout.on('data', (data) => {
+    return new Promise((resolve) => {
+      child.stdout.on('data', (data) => {
         console.log(`stdout: ${data}`);
         stdout.push(data.toString('utf8'));
       });
@@ -693,21 +672,23 @@ class Chat extends ClientBase {
         console.log(`child process errored with err ${err}`);
         resolve([err, stdout, stderr]);
       });
-
     });
-
   }
 
-
   sendMoneyInChat(topic, team, amount, recipient, extraParams) {
-
     return new Promise((resolve) => {
-
       console.log('sendMoneyInChat: 1');
-      const child = child_process.spawn(`${croupierDirectory}/scripts/sendmoney.sh`,
-        [team, topic, amount, recipient, extraParams, this._workingDir, this.homeDir]);
+      const child = child_process.spawn(`${croupierDirectory}/scripts/sendmoney.sh`, [
+        team,
+        topic,
+        amount,
+        recipient,
+        extraParams,
+        this._workingDir,
+        this.homeDir,
+      ]);
 
-      let errors = [];
+      const errors = [];
 
       child.stdout.on('data', (data) => {
         console.log(`stdout: ${data}`);
@@ -728,10 +709,7 @@ class Chat extends ClientBase {
         errors.push(err);
         throw JSON.stringify(errors);
       });
-
     });
-
-
   }
 
   /**
@@ -747,7 +725,7 @@ class Chat extends ClientBase {
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'list',
-      options
+      options,
     });
 
     if (!res) {
@@ -766,17 +744,13 @@ class Chat extends ClientBase {
    * bot.chat.listChannels('team_name').then(chatConversations => console.log(chatConversations))
    */
 
-
   async listChannels(name, options) {
     await this._guardInitialized();
-    const optionsWithDefaults = { ...options,
-      name,
-      membersType: options && options.membersType ? options.membersType : 'team'
-    };
+    const optionsWithDefaults = { ...options, name, membersType: options && options.membersType ? options.membersType : 'team' };
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'listconvsonname',
-      options: optionsWithDefaults
+      options: optionsWithDefaults,
     });
 
     if (!res) {
@@ -795,28 +769,27 @@ class Chat extends ClientBase {
    * alice.chat.read(channel).then(messages => console.log(messages))
    */
 
-
   async read(channel, options) {
     await this._guardInitialized();
-    const optionsWithDefaults = { ...options,
+    const optionsWithDefaults = {
+      ...options,
       channel,
       peek: options && options.peek ? options.peek : false,
-      unreadOnly: options && options.unreadOnly !== undefined ? options.unreadOnly : false
+      unreadOnly: options && options.unreadOnly !== undefined ? options.unreadOnly : false,
     };
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'read',
-      options: optionsWithDefaults
+      options: optionsWithDefaults,
     });
 
     if (!res) {
       throw new Error('Keybase chat read returned nothing.');
     } // Pagination gets passed as-is, while the messages get cleaned up
 
-
     return {
       pagination: res.pagination,
-      messages: res.messages.map(message => message.msg)
+      messages: res.messages.map(message => message.msg),
     };
   }
   /**
@@ -833,15 +806,14 @@ class Chat extends ClientBase {
    * })
    */
 
-
   async joinChannel(channel) {
     await this._guardInitialized();
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'join',
       options: {
-        channel
-      }
+        channel,
+      },
     });
 
     if (!res) {
@@ -862,15 +834,14 @@ class Chat extends ClientBase {
    * })
    */
 
-
   async leaveChannel(channel) {
     await this._guardInitialized();
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'leave',
       options: {
-        channel
-      }
+        channel,
+      },
     });
 
     if (!res) {
@@ -878,18 +849,14 @@ class Chat extends ClientBase {
     }
   }
 
-
   // custom hack
   async edit(channel, messageId, options) {
     await this._guardInitialized();
-    const args = { ...options,
-      channel,
-      messageId
-    };
+    const args = { ...options, channel, messageId };
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'edit',
-      options: args
+      options: args,
     });
 
     if (!res) {
@@ -897,10 +864,9 @@ class Chat extends ClientBase {
     }
 
     return {
-      id: res.id
+      id: res.id,
     };
   }
-
 
   /**
    * Send a message to a certain channel.
@@ -914,17 +880,13 @@ class Chat extends ClientBase {
    * bot.chat.send(channel, message).then(() => console.log('message sent!'))
    */
 
-
   async send(channel, message, options) {
     await this._guardInitialized();
-    const args = { ...options,
-      channel,
-      message
-    };
+    const args = { ...options, channel, message };
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'send',
-      options: args
+      options: args,
     });
 
     if (!res) {
@@ -932,7 +894,7 @@ class Chat extends ClientBase {
     }
 
     return {
-      id: res.id
+      id: res.id,
     };
   }
   /**
@@ -943,16 +905,15 @@ class Chat extends ClientBase {
    * bot.chat.createChannel(channel).then(() => console.log('conversation created'))
    */
 
-
   async createChannel(channel) {
     await this._guardInitialized();
     const args = {
-      channel
+      channel,
     };
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'newconv',
-      options: args
+      options: args,
     });
 
     if (!res) {
@@ -969,17 +930,13 @@ class Chat extends ClientBase {
    * bot.chat.attach(channel, '/Users/nathan/my_picture.png').then(() => console.log('Sent a picture!'))
    */
 
-
   async attach(channel, filename, options) {
     await this._guardInitialized();
-    const args = { ...options,
-      channel,
-      filename
-    };
+    const args = { ...options, channel, filename };
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'attach',
-      options: args
+      options: args,
     });
 
     if (!res) {
@@ -987,7 +944,7 @@ class Chat extends ClientBase {
     }
 
     return {
-      id: res.id
+      id: res.id,
     };
   }
   /**
@@ -1001,18 +958,15 @@ class Chat extends ClientBase {
    * bot.chat.download(channel, 325, '/Users/nathan/Downloads/file.png')
    */
 
-
   async download(channel, messageId, output, options) {
     await this._guardInitialized();
-    const args = { ...options,
-      channel,
-      messageId,
-      output
+    const args = {
+      ...options, channel, messageId, output,
     };
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'download',
-      options: args
+      options: args,
     });
 
     if (!res) {
@@ -1031,20 +985,20 @@ class Chat extends ClientBase {
    * bot.chat.react(channel, 314, ':+1:').then(() => console.log('Thumbs up!'))
    */
 
-
   async react(channel, messageId, reaction, options) {
     await this._guardInitialized();
-    const args = { ...options,
+    const args = {
+      ...options,
       channel,
       messageId,
       message: {
-        body: reaction
-      }
+        body: reaction,
+      },
     };
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'reaction',
-      options: args
+      options: args,
     });
 
     if (!res) {
@@ -1052,7 +1006,7 @@ class Chat extends ClientBase {
     }
 
     return {
-      id: res.id
+      id: res.id,
     };
   }
   /**
@@ -1067,17 +1021,13 @@ class Chat extends ClientBase {
    * bot.chat.delete(channel, 314).then(() => console.log('message deleted!'))
    */
 
-
   async delete(channel, messageId, options) {
     await this._guardInitialized();
-    const args = { ...options,
-      channel,
-      messageId
-    };
+    const args = { ...options, channel, messageId };
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'delete',
-      options: args
+      options: args,
     });
 
     if (!res) {
@@ -1090,13 +1040,12 @@ class Chat extends ClientBase {
    * bot.chat.getUnfurlSettings().then((mode) => console.log(mode))
    */
 
-
   async getUnfurlSettings() {
     await this._guardInitialized();
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'getunfurlsettings',
-      options: {}
+      options: {},
     });
 
     if (!res) {
@@ -1114,13 +1063,12 @@ class Chat extends ClientBase {
    * }).then((mode) => console.log('mode updated!'))
    */
 
-
   async setUnfurlSettings(mode) {
     await this._guardInitialized();
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'setunfurlsettings',
-      options: mode
+      options: mode,
     });
 
     if (!res) {
@@ -1135,19 +1083,18 @@ class Chat extends ClientBase {
    * @param gameID - gameID from the flip message contents.
    */
 
-
   async loadFlip(conversationID, flipConversationID, messageID, gameID) {
     await this._guardInitialized();
     const res = await this._runApiCommand({
       apiName: 'chat',
       method: 'loadflip',
       options: {
-        "conversation_id": conversationID,
-        "flip_conversation_id": flipConversationID,
-        "msg_id": messageID,
-        "game_id": gameID
+        conversation_id: conversationID,
+        flip_conversation_id: flipConversationID,
+        msg_id: messageID,
+        game_id: gameID,
       },
-      timeout: 2000
+      timeout: 2000,
     });
 
     if (!res) {
@@ -1173,7 +1120,6 @@ class Chat extends ClientBase {
    * }
    * bot.chat.watchChannelForNewMessages(channel, onMessage)
    */
-
 
   async watchChannelForNewMessages(channel, onMessage, onError, options) {
     await this._guardInitialized();
@@ -1202,7 +1148,6 @@ class Chat extends ClientBase {
    *
    */
 
-
   async watchAllChannelsForNewMessages(onMessage, onError, options) {
     await this._guardInitialized();
 
@@ -1220,7 +1165,6 @@ class Chat extends ClientBase {
    * this._chatListen(onMessage, onError)
    */
 
-
   _chatListen(onMessage, onError, channel, options) {
     const args = ['chat', 'api-listen'];
 
@@ -1228,7 +1172,7 @@ class Chat extends ClientBase {
       args.unshift('--home', this.homeDir);
     }
 
-    if (!options || options && options.hideExploding !== false) {
+    if (!options || (options && options.hideExploding !== false)) {
       args.push('--hide-exploding');
     }
 
@@ -1239,18 +1183,22 @@ class Chat extends ClientBase {
     const child = child_process.spawn(this._pathToKeybaseBinary(), args);
     this.spawnedProcesses.push(child);
     const lineReaderStdout = readline.createInterface({
-      input: child.stdout
+      input: child.stdout,
     });
 
-    const onLine = line => {
+    const onLine = (line) => {
       try {
         const messageObject = formatAPIObjectOutput(JSON.parse(line));
 
         if (messageObject.hasOwnProperty('error')) {
           throw new Error(messageObject.error);
-        } else if ( // fire onMessage if it was from a different sender or at least a different device
-        // from this sender. Bots can filter out their own messages from other devices.
-        this.username && this.devicename && (messageObject.msg.sender.username !== this.username.toLowerCase() || messageObject.msg.sender.deviceName !== this.devicename)) {
+        } else if (
+          // fire onMessage if it was from a different sender or at least a different device
+          // from this sender. Bots can filter out their own messages from other devices.
+          this.username
+          && this.devicename
+          && (messageObject.msg.sender.username !== this.username.toLowerCase() || messageObject.msg.sender.deviceName !== this.devicename)
+        ) {
           onMessage(messageObject.msg);
         }
       } catch (error) {
@@ -1262,7 +1210,6 @@ class Chat extends ClientBase {
 
     lineReaderStdout.on('line', onLine);
   }
-
 }
 
 /** The wallet module of your Keybase bot. For more info about the API this module uses, you may want to check out `keybase wallet api`. */
@@ -1278,7 +1225,7 @@ class Wallet extends ClientBase {
     await this._guardInitialized();
     const res = await this._runApiCommand({
       apiName: 'wallet',
-      method: 'balances'
+      method: 'balances',
     });
 
     if (!res) {
@@ -1296,22 +1243,20 @@ class Wallet extends ClientBase {
    * bot.wallet.history('GDUKZH6Q3U5WQD4PDGZXYLJE3P76BDRDWPSALN4OUFEESI2QL5UZHCK').then(transactions => console.log(transactions))
    */
 
-
   async history(accountId) {
     await this._guardInitialized();
     const options = {
-      accountId
+      accountId,
     };
     const res = await this._runApiCommand({
       apiName: 'wallet',
       method: 'history',
-      options: options
+      options,
     });
 
     if (!res) {
       throw new Error('Keybase wallet history returned nothing.');
     } // Removes a single object with property `payment`
-
 
     const cleanedRes = res.map(payment => payment.payment);
     return cleanedRes;
@@ -1325,16 +1270,15 @@ class Wallet extends ClientBase {
    * bot.wallet.details('e5334601b9dc2a24e031ffeec2fce37bb6a8b4b51fc711d16dec04d3e64976c4').then(details => console.log(details))
    */
 
-
   async details(transactionId) {
     await this._guardInitialized();
     const options = {
-      txid: transactionId
+      txid: transactionId,
     };
     const res = await this._runApiCommand({
       apiName: 'wallet',
       method: 'details',
-      options: options
+      options,
     });
 
     if (!res) {
@@ -1356,16 +1300,15 @@ class Wallet extends ClientBase {
    * _.isEqual(lookup1, lookup2) // => true
    */
 
-
   async lookup(name) {
     await this._guardInitialized();
     const options = {
-      name
+      name,
     };
     const res = await this._runApiCommand({
       apiName: 'wallet',
       method: 'lookup',
-      options
+      options,
     });
 
     if (!res) {
@@ -1389,19 +1332,18 @@ class Wallet extends ClientBase {
    * bot.wallet.send('nathunsmitty', '3.50', 'USD', 'Shut up and take my money!') // Send $3.50 worth of lumens to Keybase user `nathunsmitty` with a memo
    */
 
-
   async send(recipient, amount, currency, message) {
     await this._guardInitialized();
     const options = {
       recipient,
       amount,
       currency,
-      message
+      message,
     };
     const res = await this._runApiCommand({
       apiName: 'wallet',
       method: 'send',
-      options
+      options,
     });
 
     if (!res) {
@@ -1421,17 +1363,16 @@ class Wallet extends ClientBase {
    * bot.wallet.batch("airdrop2040",[{"recipient":"a1","amount": "1.414", "message": "hi a1, yes 1"},{"recipient": "a2", "amount": "3.14159", "message": "hi a2, yes 2"},}])
    */
 
-
   async batch(batchId, payments) {
     await this._guardInitialized();
     const options = {
       batchId,
-      payments
+      payments,
     };
     const res = await this._runApiCommand({
       apiName: 'wallet',
       method: 'batch',
-      options
+      options,
     });
 
     if (!res) {
@@ -1448,37 +1389,28 @@ class Wallet extends ClientBase {
    * bot.wallet.cancel('e5334601b9dc2a24e031ffeec2fce37bb6a8b4b51fc711d16dec04d3e64976c4').then(() => console.log('Transaction successfully canceled!'))
    */
 
-
   async cancel(transactionId) {
     await this._guardInitialized();
     const options = {
-      txid: transactionId
+      txid: transactionId,
     };
     const res = await this._runApiCommand({
       apiName: 'wallet',
       method: 'cancel',
-      options
+      options,
     });
 
     if (!res) {
       throw new Error('Keybase wallet cancel returned nothing.');
     }
   }
-
 }
 
 /** The wallet module of your Keybase bot. For more info about the API this module uses, you may want to check out `keybase wallet api`. */
 class Team extends ClientBase {
-
-
   createSubteam(name) {
-
-
-    return new Promise(resolve => {
-
-      const child = child_process.spawn(`${croupierDirectory}/scripts/createteam.sh`,
-      [name, this._workingDir, this.homeDir]);
-
+    return new Promise((resolve) => {
+      const child = child_process.spawn(`${croupierDirectory}/scripts/createteam.sh`, [name, this._workingDir, this.homeDir]);
 
       child.stdout.on('data', (data) => {
         console.log(`stdout: ${data}`);
@@ -1497,14 +1429,8 @@ class Team extends ClientBase {
         console.log(`child process errored with err ${err}`);
         resolve(false);
       });
-
-
     });
-
-
-
   }
-
 
   /**
    * Add a bunch of people with different privileges to a team
@@ -1520,7 +1446,7 @@ class Team extends ClientBase {
     const res = await this._runApiCommand({
       apiName: 'team',
       method: 'add-members',
-      options
+      options,
     });
 
     if (!res) {
@@ -1538,14 +1464,13 @@ class Team extends ClientBase {
    * bot.team.removeMember({"team": "phoenix", "username": "frank"}).then(res => console.log(res))
    */
 
-
   async removeMember(removal) {
     await this._guardInitialized();
     const options = removal;
     const res = await this._runApiCommand({
       apiName: 'team',
       method: 'remove-member',
-      options
+      options,
     });
     return res;
   }
@@ -1558,14 +1483,13 @@ class Team extends ClientBase {
    * bot.team.listTeamMemberships({"team": "phoenix"}).then(res => console.log(res))
    */
 
-
   async listTeamMemberships(team) {
     await this._guardInitialized();
     const options = team;
     const res = await this._runApiCommand({
       apiName: 'team',
       method: 'list-team-memberships',
-      options
+      options,
     });
 
     if (!res) {
@@ -1574,10 +1498,7 @@ class Team extends ClientBase {
 
     return res;
   }
-
 }
-
-
 
 /** A Keybase bot. */
 class Bot {
@@ -1606,7 +1527,6 @@ class Bot {
    * bot.init('username', 'paperkey')
    */
 
-
   async init(username, paperkey, options) {
     await this._prepWorkingDir();
     await this._service.init(username, paperkey, options);
@@ -1621,7 +1541,6 @@ class Bot {
    * bot.initFromRunningService()
    */
 
-
   async initFromRunningService(homeDir, options) {
     await this._prepWorkingDir();
     await this._service.initFromRunningService(homeDir, options);
@@ -1635,7 +1554,6 @@ class Bot {
    * const info = bot.myInfo()
    */
 
-
   myInfo() {
     return this._service.myInfo();
   }
@@ -1645,7 +1563,6 @@ class Bot {
    * @example
    * bot.deinit()
    */
-
 
   async deinit() {
     console.log('deinit', this._service.username);
@@ -1674,8 +1591,7 @@ class Bot {
       throw new Error('Issue initializing bot.');
     }
   }
-
 }
 
 module.exports = Bot;
-//# sourceMappingURL=index.js.map
+// # sourceMappingURL=index.js.map

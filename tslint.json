@@ -1,14 +1,27 @@
 {
-    "defaultSeverity": "error",
-    "extends": [
-        "tslint:recommended"
+  "defaultSeverity": "error",
+  "extends": ["tslint:recommended"],
+  "jsRules": {},
+  "rules": {
+    "no-console": false,
+    "array-type": false,
+    "typedef": [
+      true,
+      "call-signature",
+      "parameter",
+      "property-declaration",
+      "variable-declaration",
+      "member-variable-declaration",
+      "object-destructuring",
+      "array-destructuring"
     ],
-    "jsRules": {
-    },
-    "rules": {
-	   "no-console": false,
-       "array-type": false,
-       "typedef": [true, "call-signature",  "parameter", "property-declaration", "variable-declaration", "member-variable-declaration", "object-destructuring", "array-destructuring"]
-    },
-    "rulesDirectory": []
+    "max-line-length": [
+      true,
+      {
+        "limit": 120,
+        "ignore-pattern": "^import .+ |^export | implements| //"
+      }
+    ]
+  },
+  "rulesDirectory": []
 }

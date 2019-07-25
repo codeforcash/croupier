@@ -7,36 +7,24 @@ import * as Bot from "./keybase-bot";
 
 import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
 
-import {
-  IBetData,
-  IBetList,
-  IParticipant,
-  IPopularityContest,
-  IPositionSize,
-  IPowerup,
-  IPowerupAward,
-  IReactionContent,
-} from "./types";
+import { IBetData, IBetList, IParticipant, IPopularityContest, IPositionSize, IPowerup, IPowerupAward, IReactionContent } from "./types";
 
 type ThrottledChat = (message: string) => Promise<any>;
 type ThrottledMoneyTransfer = (xlmAmount: number, recipient: string) => Promise<any>;
 
-class SnipeEmitter extends EventEmitter {}
-
 class Snipe {
-
-  public emitter: SnipeEmitter;
+  public emitter: EventEmitter;
   public bot1: Bot;
   public bot2: Bot;
   public channel: ChatChannel;
   public croupier: Croupier;
   public participants: Array<IParticipant>;
-  public betting_open: boolean;
+  public bettingOpen: boolean;
   public clock: string;
   public timeout: NodeJS.Timeout;
   public countdown: number;
   public snipeId: string;
-  public betting_stops: moment.Moment;
+  public bettingStops: moment.Moment;
   public chatSend: ThrottledChat;
   public moneySend: ThrottledMoneyTransfer;
   public positionSizes: IPositionSize;
@@ -44,7 +32,7 @@ class Snipe {
   public runningClocks: object;
   public bettingTable: string;
   public blinds: number;
-  public betting_started: number;
+  public bettingStarted: number;
   public popularityContests: Array<IPopularityContest>;
   public potSizeStored: number;
   public clockRemaining: number;
@@ -53,10 +41,11 @@ class Snipe {
   public flipMonitorIntervals: object;
   public croupierMessages: object;
 
-  public constructor(croupier, channel, bots, options) {
+  public constructor(croupier: Croupier, channel: ChatChannel, bots: any, options: any) {
+    // TODO: Bots and Options should really be interfaces, not an any
 
-    const self = this;
-    this.emitter = new SnipeEmitter();
+    const self: Snipe = this;
+    this.emitter = new EventEmitter();
     this.croupierMessages = {};
     this.runningClocks = {};
     this.flipMonitorIntervals = {};
@@ -65,18 +54,18 @@ class Snipe {
     this.bot1 = bots.bot1;
     this.bot2 = bots.bot2;
 
-    this.betting_open = true;
-    if (options.betting_started) {
-      this.betting_started = parseInt(options.betting_started, 10);
+    this.bettingOpen = true;
+    if (options.bettingStarted) {
+      this.bettingStarted = parseInt(options.bettingStarted, 10);
     } else {
-      this.betting_started = +new Date();
+      this.bettingStarted = +new Date();
     }
 
-    if (typeof(options.countdown) === "undefined") {
+    if (typeof options.countdown === "undefined") {
       options.countdown = 60;
     }
     this.countdown = options.countdown;
-    this.betting_stops = moment().add(this.countdown, "seconds");
+    this.bettingStops = moment().add(this.countdown, "seconds");
 
     if (options.blinds) {
       this.blinds = parseFloat(options.blinds);
@@ -89,42 +78,43 @@ class Snipe {
     this.chatSend = (message) => {
       return new Promise((resolveChatThrottle) => {
         chatThrottle(() => {
-          self.bot1.chat.send(channel, {
-            body: message,
-          }, undefined).then((sentMessage) => {
-
-            self.croupierMessages[sentMessage.id] = [];
-            resolveChatThrottle(sentMessage);
-          });
+          self.bot1.chat
+            .send(
+              channel,
+              {
+                body: message,
+              },
+              undefined,
+            )
+            .then((sentMessage) => {
+              self.croupierMessages[sentMessage.id] = [];
+              resolveChatThrottle(sentMessage);
+            });
         });
       });
     };
 
     this.clock = null;
-    if (options.clock_remaining) {
-      this.clockRemaining = options.clock_remaining;
-    } else {
-
+    if (options.clockRemaining) {
+      this.clockRemaining = options.clockRemaining;
     }
 
     const moneyThrottle: any = throttledQueue(1, 1000);
     this.moneySend = (amount, recipient, extraParams = "") => {
       return new Promise((resolveMoneyThrottle) => {
         moneyThrottle(() => {
-
           try {
-
             self.bot1.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient, extraParams);
             resolveMoneyThrottle();
-
           } catch (e) {
-
-            self.bot1.chat.send({
-              name: `zackburt,${self.croupier.botUsername}`,
-              public: false,
-              topicType: "chat",
-            }, {
-              body: `There was an error sending money
+            self.bot1.chat.send(
+              {
+                name: `zackburt,${self.croupier.botUsername}`,
+                public: false,
+                topicType: "chat",
+              },
+              {
+                body: `There was an error sending money
 
               Snipe: ${self.snipeId}
               Channel topic: ${channel.topicName}
@@ -134,10 +124,10 @@ class Snipe {
               Extra Params: ${extraParams}
 
               ERRORS: ${e}`,
-            }, undefined);
-
+              },
+              undefined,
+            );
           }
-
         });
       });
     };
@@ -226,7 +216,6 @@ class Snipe {
         reaction: ":dagger_knife:",
       },
     ];
-
   }
 
   // If the same person made 3 bets in a row, issue a powerup
@@ -234,26 +223,27 @@ class Snipe {
   public shouldIssuePowerup(): boolean {
     const count: number = this.participants.length;
 
-    const self = this;
+    const self: Snipe = this;
 
     // Have there been at least 3 bets?
     // And have the 3 most recent bets all been entered by the same person?
-    if (count >= 3
-        && this.participants[count - 1].username === this.participants[count - 2].username
-        && this.participants[count - 2].username === this.participants[count - 3].username
-      ) {
-
+    if (
+      count >= 3 &&
+      this.participants[count - 1].username === this.participants[count - 2].username &&
+      this.participants[count - 2].username === this.participants[count - 3].username
+    ) {
       //  Don't grant powerups for free bets
-      if (this.participants[count - 3].freeBet
-        || this.participants[count - 2].freeBet
-        || this.participants[count - 1].freeBet) {
+      if (this.participants[count - 3].freeBet || this.participants[count - 2].freeBet ||
+          this.participants[count - 1].freeBet) {
         return false;
       }
 
       //  Don't grant a powerup if the bets were below blinds
-      if (this.participants[count - 1].transaction.amount < self.blinds ||
-          this.participants[count - 2].transaction.amount < self.blinds ||
-          this.participants[count - 3].transaction.amount < self.blinds) {
+      if (
+        this.participants[count - 1].transaction.amount < self.blinds ||
+        this.participants[count - 2].transaction.amount < self.blinds ||
+        this.participants[count - 3].transaction.amount < self.blinds
+      ) {
         return false;
       }
 
@@ -273,7 +263,7 @@ class Snipe {
       // Has it been at least 3 powerups since the most recent powerup was issued?
       // This logic doesn't work if there has never been a powerup issued,
       // hence the extra condition check ^
-      if (((count - 1) - lastPowerupIndex) >= 3) {
+      if (count - 1 - lastPowerupIndex >= 3) {
         return true;
       } else {
         return false;
@@ -289,9 +279,8 @@ class Snipe {
   }
 
   public checkForPopularityContestEnd(pollMessageId: string): void {
-    const self = this;
+    const self: Snipe = this;
     this.popularityContests.forEach((contest, contestIdx) => {
-
       if (contest.votesForChallenger.length >= 3) {
         const leaderPositionSize: number = self.positionSizes[contest.leader];
         const challengerPositionSize: number = self.positionSizes[contest.challenger];
@@ -314,7 +303,6 @@ class Snipe {
         // mark the contest closed
         self.popularityContests.splice(contestIdx, 1);
       }
-
     });
   }
 
@@ -329,22 +317,22 @@ class Snipe {
     };
 
     const awardee: string = this.participants[participantIndex].username;
-    this.chatSend(`Congrats @${awardee}, you won the **${award.name}** powerup.
+    this.chatSend(
+      `Congrats @${awardee}, you won the **${award.name}** powerup.
       *${award.description}*
-      Click the emoji to consume the powerup.`).then((msg) => {
-        this.bot1.chat.react(this.channel, msg.id, award.reaction, undefined);
-        this.participants[participantIndex].powerup.reactionId = msg.id;
+      Click the emoji to consume the powerup.`,
+    ).then((msg) => {
+      this.bot1.chat.react(this.channel, msg.id, award.reaction, undefined);
+      this.participants[participantIndex].powerup.reactionId = msg.id;
     });
-
   }
 
   public addSnipeParticipant(txn: Transaction, onBehalfOf?: string): void {
-
-    const self = this;
+    const self: Snipe = this;
     let newParticipant: IParticipant;
     let betBeneficiary: string;
 
-    if (typeof(onBehalfOf) === "undefined") {
+    if (typeof onBehalfOf === "undefined") {
       newParticipant = {
         transaction: txn,
         username: txn.fromUsername,
@@ -360,7 +348,7 @@ class Snipe {
     }
 
     self.participants.push(newParticipant);
-    if (typeof(self.positionSizes[betBeneficiary]) === "undefined") {
+    if (typeof self.positionSizes[betBeneficiary] === "undefined") {
       self.positionSizes[betBeneficiary] = Math.floor(txn.amount / 0.01);
     } else {
       self.positionSizes[betBeneficiary] += Math.floor(txn.amount / 0.01);
@@ -380,17 +368,15 @@ class Snipe {
   }
 
   public calculateSnipeBounty(): Promise<number> {
-
     let bounty: number = 0;
-    const self = this;
+    const self: Snipe = this;
 
     return new Promise((resolve) => {
-
       const transactionFeePromises: Array<Promise<any>> = [];
 
       self.participants.forEach((participant) => {
-         bounty += parseFloat(participant.transaction.amount);
-         transactionFeePromises.push(self.croupier.calculateTransactionFees(participant.transaction));
+        bounty += parseFloat(participant.transaction.amount);
+        transactionFeePromises.push(self.croupier.calculateTransactionFees(participant.transaction));
       });
 
       Promise.all(transactionFeePromises).then((values: Array<number>) => {
@@ -400,79 +386,72 @@ class Snipe {
         bounty = _.round(bounty, 7);
         resolve(bounty);
       });
-
     });
   }
 
   public sendAmountToWinner(winnerUsername: string, bounty: number, channel: ChatChannel): Promise<any> {
-
-    const self = this;
+    const self: Snipe = this;
 
     return new Promise((resolve) => {
-
       //  If winnerUsername is a participant in this chat, moneySend
       //  Otherwise, use stellar.expert.xlm method
-      self.bot1.team.listTeamMemberships({
-        team: channel.name,
-      }).then((res) => {
+      self.bot1.team
+        .listTeamMemberships({
+          team: channel.name,
+        })
+        .then((res) => {
+          let allMembers: Array<string> = [];
+          allMembers = allMembers.concat(res.members.owners.map((u) => u.username));
+          allMembers = allMembers.concat(res.members.admins.map((u) => u.username));
+          allMembers = allMembers.concat(res.members.writers.map((u) => u.username));
+          allMembers = allMembers.concat(res.members.readers.map((u) => u.username));
 
-        let allMembers: Array<string> = [];
-        allMembers = allMembers.concat(res.members.owners.map((u) => u.username));
-        allMembers = allMembers.concat(res.members.admins.map((u) => u.username));
-        allMembers = allMembers.concat(res.members.writers.map((u) => u.username));
-        allMembers = allMembers.concat(res.members.readers.map((u) => u.username));
-
-        // it's possible the winner is not in the chat, that they won through a onBehalfOf contribution of someone else
-        if (allMembers.indexOf(winnerUsername) === -1) {
-
-          try {
-
-            self.bot1.wallet.send(winnerUsername, bounty.toString()).then((txn) => {
-              let bountyMsg: string = `\`+${bounty}XLM@${winnerUsername}\` `;
-              bountyMsg += `:arrow_right: `;
-              bountyMsg += `https://stellar.expert/explorer/public/tx/${txn.txId}\n\n`;
-              bountyMsg += `Please contact ${winnerUsername} and request they claim their winnings.`;
-              self.chatSend(bountyMsg);
-              console.log("emitting roundComplete event");
-              self.emitter.emit("roundComplete");
-              resolve();
-            });
-
-          } catch (e) {
-
-            self.bot1.chat.send({
-              name: `zackburt,${self.croupier.botUsername}`,
-              public: false,
-              topicType: "chat",
-            }, {
-              body: `There was an error sending money to a winner
+          // it's possible the winner is not in the chat, that they won through a onBehalfOf contribution of someone else
+          if (allMembers.indexOf(winnerUsername) === -1) {
+            try {
+              self.bot1.wallet.send(winnerUsername, bounty.toString()).then((txn) => {
+                let bountyMsg: string = `\`+${bounty}XLM@${winnerUsername}\` `;
+                bountyMsg += `:arrow_right: `;
+                bountyMsg += `https://stellar.expert/explorer/public/tx/${txn.txId}\n\n`;
+                bountyMsg += `Please contact ${winnerUsername} and request they claim their winnings.`;
+                self.chatSend(bountyMsg);
+                console.log("emitting roundComplete event");
+                self.emitter.emit("roundComplete");
+                resolve();
+              });
+            } catch (e) {
+              self.bot1.chat.send(
+                {
+                  name: `zackburt,${self.croupier.botUsername}`,
+                  public: false,
+                  topicType: "chat",
+                },
+                {
+                  body: `There was an error sending money to a winner
 
               Snipe: ${self.snipeId}
               Winner: ${winnerUsername}
               Amount: ${bounty.toString()}
 
               ERRORS: ${e}`,
-            }, undefined);
-            throw e;
-
+                },
+                undefined,
+              );
+              throw e;
+            }
+          } else {
+            self.moneySend(bounty, winnerUsername).then((d) => {
+              console.log("emitting roundComplete event");
+              self.emitter.emit("roundComplete");
+              resolve();
+            });
           }
-
-        } else {
-          self.moneySend(bounty, winnerUsername).then((d) => {
-            console.log("emitting roundComplete event");
-            self.emitter.emit("roundComplete");
-            resolve();
-          });
-
-        }
-      });
-
+        });
     });
-
   }
 
   public resolveFlip(winningNumber: number): Promise<string> {
-    const self = this;
+    const self: Snipe = this;
     let winnerUsername: string;
     const bettorRange: object = this.buildBettorRange();
     Object.keys(bettorRange).forEach((username) => {
@@ -484,32 +463,27 @@ class Snipe {
     this.chatSend(`Congrats to @${winnerUsername}`);
 
     return new Promise((resolve) => {
-
       console.log("calculating snipe bounty");
       this.calculateSnipeBounty().then((bounty) => {
-
         console.log("calculated the bounty", bounty);
 
-        self.croupier.tabulateNetGains(winnerUsername, bounty, self.participants)
-          .then((winnerNetGains) => {
+        self.croupier.tabulateNetGains(winnerUsername, bounty, self.participants).then((winnerNetGains) => {
+          console.log("tabulated the net gains", winnerNetGains);
+          if (winnerNetGains < 5000) {
+            console.log("calling sendAmountToWinner");
+            self.sendAmountToWinner(winnerUsername, bounty, self.channel).then(() => {
+              console.log("resolved sendAmountToWinner", winnerUsername);
+              resolve(winnerUsername);
+            });
+          } else {
+            const w9url: string = "https://www.irs.gov/pub/irs-pdf/fw9.pdf";
+            const w8benurl: string = "https://www.irs.gov/pub/irs-pdf/fw8ben.pdf";
+            const channelName: string = `zackburt,${self.croupier.botUsername},${winnerUsername}`;
+            const channel: ChatChannel = { name: channelName, public: false, topicType: "chat" };
 
-            console.log("tabulated the net gains", winnerNetGains);
-            if (winnerNetGains < 5000) {
-
-              console.log("calling sendAmountToWinner");
-              self.sendAmountToWinner(winnerUsername, bounty, self.channel).then(() => {
-                console.log("resolved sendAmountToWinner", winnerUsername);
-                resolve(winnerUsername);
-              });
-
-            } else {
-
-              const w9url = "https://www.irs.gov/pub/irs-pdf/fw9.pdf";
-              const w8benurl = "https://www.irs.gov/pub/irs-pdf/fw8ben.pdf";
-              const channelName = `zackburt,${self.croupier.botUsername},${winnerUsername}`;
-              const channel = {name: channelName, public: false, topicType: "chat"};
-
-              self.bot1.chat.send(channel, {
+            self.bot1.chat.send(
+              channel,
+              {
                 body: `Congratulations on winning snipe ${self.snipeId} and the bounty ${bounty}
 
                 In order to send your winnings we must process a tax form.
@@ -517,31 +491,30 @@ class Snipe {
                 If you live in the US, reply with this complete form: ${w9url}
 
                 If you live outside the US, reply with this complete form: ${w8benurl}`,
-              }, undefined);
-              resolve(winnerUsername);
-
-            }
-
+              },
+              undefined,
+            );
+            resolve(winnerUsername);
+          }
         });
-
       });
-
     });
-
   }
 
   public buildBettorRange(): any {
     const bettorMap: object = {};
-    const self = this;
+    const self: Snipe = this;
     const bettorRange: object = {};
     let start: number = 0;
 
-    Object.keys(self.positionSizes).sort((a, b) => {
-      return self.positionSizes[a] > self.positionSizes[b] ? -1 : 1;
-    }).forEach((username) => {
-      bettorRange[username] = [start + 1, start + self.positionSizes[username]];
-      start += self.positionSizes[username];
-    });
+    Object.keys(self.positionSizes)
+      .sort((a, b) => {
+        return self.positionSizes[a] > self.positionSizes[b] ? -1 : 1;
+      })
+      .forEach((username) => {
+        bettorRange[username] = [start + 1, start + self.positionSizes[username]];
+        start += self.positionSizes[username];
+      });
     return bettorRange;
   }
 
@@ -554,7 +527,6 @@ class Snipe {
   }
 
   public buildBettingTable(): string {
-
     const potSize: number = this.calculatePotSize();
     const bettorRange: object = this.buildBettorRange();
 
@@ -565,8 +537,7 @@ class Snipe {
     let bettorRank: number = 1;
 
     Object.keys(bettorRange).forEach((username) => {
-
-      const chancePct: number = 100 * ( (1 + (bettorRange[username][1] - bettorRange[username][0])) / maxValue);
+      const chancePct: number = 100 * ((1 + (bettorRange[username][1] - bettorRange[username][0])) / maxValue);
 
       bettingTable += `\n${bettorRank}. @${username}: \``;
       bettorRank += 1;
@@ -579,15 +550,14 @@ class Snipe {
     });
 
     return bettingTable;
-
   }
 
   public makeSubteamForFlip(): void {
-    const self = this;
+    const self: Snipe = this;
     console.log("this.snipeId", this.snipeId);
     const subTeamId: string = this.snipeId.substr(0, 11);
     const subteamName: string = `croupierflips.snipe${subTeamId}`;
-    const usernamesToAdd: Array<object> = [{username: "croupier", role: "admin"}];
+    const usernamesToAdd: Array<object> = [{ username: "croupier", role: "admin" }];
 
     Object.keys(self.positionSizes).forEach((username) => {
       usernamesToAdd.push({
@@ -599,29 +569,32 @@ class Snipe {
     console.log("Creating the subteam", subteamName);
 
     const newSubteam: ChatChannel = {
-      membersType: "team", name: subteamName,
+      membersType: "team",
+      name: subteamName,
     };
 
     self.bot1.team.createSubteam(subteamName).then((res) => {
       console.log("Subteam creation complete!", res);
       console.log("Attempting to add people to the team", usernamesToAdd);
-      self.bot1.team.addMembers({
-        team: subteamName,
-        usernames: usernamesToAdd,
-      }).then((addMembersRes) => {
-        console.log("Adding people to the team was successful!", addMembersRes);
-        self.flip(newSubteam);
-      }).catch((e) => {
-        console.log(e);
-        self.flip(newSubteam);
-      });
+      self.bot1.team
+        .addMembers({
+          team: subteamName,
+          usernames: usernamesToAdd,
+        })
+        .then((addMembersRes) => {
+          console.log("Adding people to the team was successful!", addMembersRes);
+          self.flip(newSubteam);
+        })
+        .catch((e) => {
+          console.log(e);
+          self.flip(newSubteam);
+        });
     });
-
   }
 
   public flip(whereToFlip: ChatChannel): void {
-    const self = this;
-    if (typeof(whereToFlip) === "undefined") {
+    const self: Snipe = this;
+    if (typeof whereToFlip === "undefined") {
       whereToFlip = self.channel;
     }
 
@@ -631,27 +604,40 @@ class Snipe {
     const minBet: number = flatBettingValues.reduce((a, b) => Math.min(a, b));
     const maxBet: number = flatBettingValues.reduce((a, b) => Math.max(a, b));
 
-    this.bot2.chat.send(whereToFlip, {
-      body: "**Final betting table...**",
-    }, undefined);
-    this.bot2.chat.send(whereToFlip, {
-      body: self.buildBettingTable(),
-    }, undefined);
-    this.bot2.chat.send(whereToFlip, {
-      body: `/flip ${minBet}..${maxBet}`,
-    }, undefined).then((res) => {
-      self.reflipping = false;
-    });
+    this.bot2.chat.send(
+      whereToFlip,
+      {
+        body: "**Final betting table...**",
+      },
+      undefined,
+    );
+    this.bot2.chat.send(
+      whereToFlip,
+      {
+        body: self.buildBettingTable(),
+      },
+      undefined,
+    );
+    this.bot2.chat
+      .send(
+        whereToFlip,
+        {
+          body: `/flip ${minBet}..${maxBet}`,
+        },
+        undefined,
+      )
+      .then((res) => {
+        self.reflipping = false;
+      });
   }
 
   public processNewBet(txn: Transaction, msg: MessageSummary): Promise<boolean> {
     const channel: ChatChannel = msg.channel;
     const onBehalfOfMatch: Array<any> = msg.content.text.body.match(/(for|4):?\s?@?(\w+@?(\w+)?)/i);
 
-    const self = this;
+    const self: Snipe = this;
 
     return new Promise((resolve) => {
-
       if (onBehalfOfMatch !== null) {
         const onBehalfOfRecipient: string = onBehalfOfMatch[2];
         self.processNewBetOnBehalfOf(txn, msg, onBehalfOfRecipient, resolve);
@@ -663,15 +649,37 @@ class Snipe {
     });
   }
 
-  public processNewBetOnBehalfOf(txn, msg, recipient, resolve) {
+  public processNewBetOnBehalfOf(txn: Transaction, msg: MessageSummary, recipient: string, resolve: any): void {
     const channel: ChatChannel = msg.channel;
-    const self = this;
+    const self: Snipe = this;
 
     // check if the onBehalfOf user already has a wallet with bot.wallet.lookup(username);
     // if not, restrict the onBehalfOf wager to >= 2.01XLM, Keybase's minimum xfer for
     // new wallets
-    self.croupier.checkWalletBalance(recipient).then((balance) => {
-      if (balance === null || balance < 2.01) {
+    self.croupier
+      .checkWalletBalance(recipient)
+      .then((balance) => {
+        if (balance === null || balance < 2.01) {
+          if (txn.amount < 2.02) {
+            let sassyMessage: string = `Betting on behalf of ${recipient}?  `;
+            sassyMessage += "Seems like they do not have a wallet yet, ";
+            sassyMessage += `so your bet must be at least 2.02XLM (was ${txn.amount})`;
+            self.chatSend(sassyMessage);
+            self.croupier.processRefund(txn, msg.channel);
+            resolve(false);
+          }
+        } else if (typeof self.positionSizes[txn.fromUsername] === "undefined") {
+          self.chatSend(`You cannot bet on behalf of ${recipient} unless you are participating as well`);
+          resolve(false);
+        } else {
+          self.addSnipeParticipant(txn, recipient);
+          self.chatSend(`@${recipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
+          self.bot1.chat.react(channel, msg.id, ":gift:", undefined);
+          resolve(true);
+        }
+      })
+      .catch((e) => {
+        console.log("Probably ran into a lookup error", e);
         if (txn.amount < 2.02) {
           let sassyMessage: string = `Betting on behalf of ${recipient}?  `;
           sassyMessage += "Seems like they do not have a wallet yet, ";
@@ -679,32 +687,13 @@ class Snipe {
           self.chatSend(sassyMessage);
           self.croupier.processRefund(txn, msg.channel);
           resolve(false);
+        } else {
+          self.addSnipeParticipant(txn, recipient);
+          self.chatSend(`@${recipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
+          self.bot1.chat.react(channel, msg.id, ":gift:", undefined);
+          resolve(true);
         }
-      } else if (typeof(self.positionSizes[txn.fromUsername]) === "undefined") {
-        self.chatSend(`You cannot bet on behalf of ${recipient} unless you are participating as well`);
-        resolve(false);
-      } else {
-        self.addSnipeParticipant(txn, recipient);
-        self.chatSend(`@${recipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
-        self.bot1.chat.react(channel, msg.id, ":gift:", undefined);
-        resolve(true);
-      }
-    }).catch((e) => {
-      console.log("Probably ran into a lookup error", e);
-      if (txn.amount < 2.02) {
-        let sassyMessage: string = `Betting on behalf of ${recipient}?  `;
-        sassyMessage += "Seems like they do not have a wallet yet, ";
-        sassyMessage += `so your bet must be at least 2.02XLM (was ${txn.amount})`;
-        self.chatSend(sassyMessage);
-        self.croupier.processRefund(txn, msg.channel);
-        resolve(false);
-      } else {
-        self.addSnipeParticipant(txn, recipient);
-        self.chatSend(`@${recipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
-        self.bot1.chat.react(channel, msg.id, ":gift:", undefined);
-        resolve(true);
-      }
-    });
+      });
   }
 
   public calculatePotSize(): number {
@@ -724,12 +713,11 @@ class Snipe {
   }
 
   public getTimeLeft(): number {
-    return Math.ceil(Math.abs(moment.duration(this.betting_stops.diff(moment())).asSeconds()));
+    return Math.ceil(Math.abs(moment.duration(this.bettingStops.diff(moment())).asSeconds()));
   }
 
   public redrawBettingTable(): void {
-
-    const self = this;
+    const self: Snipe = this;
     if (this.bettingTable) {
       this.bot1.chat.delete(this.channel, this.bettingTable, {}).then(() => {
         self.chatSend(self.buildBettingTable()).then((msg) => {
@@ -741,11 +729,9 @@ class Snipe {
         self.bettingTable = msg.id;
       });
     }
-
   }
 
   public resetSnipeClock(): void {
-
     this.redrawBettingTable();
     const timeRemaining: number = Math.ceil(this.getTimeLeft());
     console.log("time remaining", timeRemaining);
@@ -760,31 +746,31 @@ class Snipe {
       timerEndsInSeconds = timeRemaining + boost;
     }
 
-    this.betting_stops = moment().add(timerEndsInSeconds, "seconds");
+    this.bettingStops = moment().add(timerEndsInSeconds, "seconds");
 
     this.bot1.chat.delete(this.channel, this.clock, {});
-    const self = this;
+    const self: Snipe = this;
     const finalizeBetsTimeout: NodeJS.Timeout = setTimeout(() => {
       self.finalizeBets();
     }, timerEndsInSeconds * 1000);
     this.timeout = finalizeBetsTimeout;
-
   }
 
   public launchSnipe(): void {
     // Tell the channel: OK, your snipe has been accepted for routing.
-    const self = this;
+    const self: Snipe = this;
     let message: string = `The round has begun (**#${self.snipeId}**).  `;
     message += `Bet in multiples of 0.01XLM.  Betting format:`;
     message += `\`\`\`+0.01XLM@${self.croupier.botUsername}\`\`\``;
     message += `Minimum bet: 0.01XLM\n`;
     message += `Make 3 uninterrupted bets of **${this.displayFixedNice(self.blinds)}XLM**`;
     message += ` and receive a powerup!`;
-    message += `\n\n**Please ensure you have read the rules before making any bets**  https://github.com/codeforcash/croupier/blob/master/RULES.md`;
+    message += `\n\n**Please ensure you have read the rules before making any bets**  `;
+    message += `https://github.com/codeforcash/croupier/blob/master/RULES.md`;
 
     self.chatSend(message);
 
-    self.chatSend(`Betting stops ${moment().to(self.betting_stops)}`).then((sentMessage) => {
+    self.chatSend(`Betting stops ${moment().to(self.bettingStops)}`).then((sentMessage) => {
       self.clock = sentMessage.id;
       self.runClock();
     });
@@ -796,29 +782,30 @@ class Snipe {
   }
 
   public finalizeBets(): void {
-    const self = this;
+    const self: Snipe = this;
     self.chatSend("No more bets!");
-    self.betting_open = false;
-     // Give 5 seconds to finalize transactions + 1 extra.
+    self.bettingOpen = false;
+    // Give 5 seconds to finalize transactions + 1 extra.
     setTimeout(() => {
       self.executeFlipOrCancel();
     }, 6 * 1000);
   }
 
   public refundAllParticipants(): void {
-    const self = this;
+    const self: Snipe = this;
     const bets: IBetList = {};
     self.participants.forEach((participant) => {
-      if (typeof(bets[participant.transaction.fromUsername]) === "undefined") {
+      if (typeof bets[participant.transaction.fromUsername] === "undefined") {
         const betData: IBetData = {
           fees: [],
           wagers: [],
         };
         bets[participant.transaction.fromUsername] = betData;
-
       }
-      bets[participant.transaction.fromUsername].fees.push(self.croupier.calculateTransactionFees(participant.transaction));
-      bets[participant.transaction.fromUsername].wagers.push(participant.transaction.amount);
+      bets[participant.transaction.fromUsername].fees.push(
+        self.croupier.calculateTransactionFees(participant.transaction));
+      bets[participant.transaction.fromUsername].wagers.push(
+        participant.transaction.amount);
     });
 
     const participantList: Array<string> = Object.keys(bets);
@@ -840,7 +827,7 @@ class Snipe {
   }
 
   public executeFlipOrCancel(): void {
-    const self = this;
+    const self: Snipe = this;
     const uniqParticipants: Array<string> = _.union(Object.keys(self.positionSizes));
     if (uniqParticipants.length > 1) {
       self.flip(self.channel);
@@ -852,7 +839,6 @@ class Snipe {
   }
 
   public cancelFlip(conversationId: string, err: Error): void {
-
     console.log("err", err);
     clearInterval(this.flipMonitorIntervals[conversationId]);
     this.chatSend(`The flip has been cancelled due to error, and everyone is getting a refund`);
@@ -863,7 +849,7 @@ class Snipe {
   public getChannelFromSnipeId(snipeId: number): ChatChannel {
     let channel: ChatChannel;
     const BreakException: object = {};
-    const self = this;
+    const self: Snipe = this;
     try {
       Object.keys(self.croupier.activeSnipes).forEach((stringifiedChannel) => {
         if (self.croupier.activeSnipes[stringifiedChannel].snipeId === snipeId) {
@@ -884,109 +870,104 @@ class Snipe {
   }
 
   public monitorFlipResults(msg: MessageSummary): void {
-
-    const self = this;
+    const self: Snipe = this;
     let ourChannel: boolean;
     let snipe: Snipe;
 
-    self.flipMonitorIntervals[msg.conversationId] = setInterval((() => {
-
+    self.flipMonitorIntervals[msg.conversationId] = setInterval(() => {
       try {
-        self.bot1.chat.loadFlip(
-          msg.conversationId,
-          msg.content.flip.flipConvId,
-          msg.id,
-          msg.content.flip.gameId,
-        ).then((flipDetails) => {
-          if (flipDetails.phase === 2) {
-            console.log("results are in");
+        self.bot1.chat
+          .loadFlip(msg.conversationId, msg.content.flip.flipConvId, msg.id, msg.content.flip.gameId)
+          .then((flipDetails) => {
+            if (flipDetails.phase === 2) {
+              console.log("results are in");
+              clearInterval(self.flipMonitorIntervals[msg.conversationId]);
+              self.resolveFlip(flipDetails.resultInfo.number).then((winner) => {
+                self.clearSnipe(winner);
+              });
+            } else {
+              console.log("results are NOT in", flipDetails);
+            }
+          })
+          .catch((err) => {
+            console.log("Error: ", err);
+
+            const channelMatch: Array<any> = msg.channel.name.match(/croupierflips.snipe(\d+)/);
+            if (channelMatch === null) {
+              snipe = self.croupier.activeSnipes[JSON.stringify(msg.channel)];
+              ourChannel = false;
+            } else {
+              console.log("channelMatch", channelMatch[1]);
+              const originalChannel: ChatChannel = self.getChannelFromSnipeId(parseInt(channelMatch[1], 10));
+              console.log("original channel", originalChannel);
+              snipe = self.croupier.activeSnipes[JSON.stringify(originalChannel)];
+              ourChannel = true;
+            }
+
+            if (snipe.reflipping) {
+              return false;
+            }
+            snipe.reflipping = true;
             clearInterval(self.flipMonitorIntervals[msg.conversationId]);
-            self.resolveFlip(flipDetails.resultInfo.number).then((winner) => {
-              self.clearSnipe(winner);
-            });
-          } else {
-            console.log("results are NOT in", flipDetails);
-          }
-        }).catch((err) => {
 
-          console.log("Error: ", err);
+            if (ourChannel) {
+              // extract the name of the offender
+              // remove the offender from the team
+              // clear the interval
+              // run the flip again
+              self.bot1.chat
+                .getFlipData(msg.conversationId, msg.content.flip.flipConvId, msg.id, msg.content.flip.gameId)
+                .then((getFlipDataRes) => {
+                  console.log("getflipdata res!");
+                  console.log(getFlipDataRes);
+                  const stdout: string = getFlipDataRes[1];
+                  console.log(stdout);
 
-          const channelMatch: Array<any> = msg.channel.name.match(/croupierflips.snipe(\d+)/);
-          if (channelMatch === null) {
-            snipe = self.croupier.activeSnipes[JSON.stringify(msg.channel)];
-            ourChannel = false;
-          } else {
+                  const result: any = JSON.parse(stdout.trim()).result;
+                  const errorInfo: any = result.status.errorInfo;
+                  console.log(errorInfo);
 
-            console.log("channelMatch", channelMatch[1]);
-            const originalChannel = self.getChannelFromSnipeId(parseInt(channelMatch[1], 10));
-            console.log("original channel", originalChannel);
-            snipe = self.croupier.activeSnipes[JSON.stringify(originalChannel)];
-            ourChannel = true;
-          }
+                  if (Object.keys(result.status).indexOf("errorInfo") !== -1 &&
+                      errorInfo.dupreg && errorInfo.dupreg.user) {
+                    self.bot1.team
+                      .removeMember({
+                        team: msg.channel.name,
+                        username: errorInfo.dupreg.user,
+                      })
+                      .then((removeMemberRes) => {
+                        snipe.chatSend(`We have punted ${errorInfo.dupreg.user} for duplicate registration issues`);
+                        self.flip(msg.channel);
+                      });
+                  } else if (result.status.phase === 2) {
+                    console.log("results are in");
+                    console.log(result.status.resultInfo.number);
+                    clearInterval(self.flipMonitorIntervals[msg.conversationId]);
+                    self.resolveFlip(result.status.resultInfo.number).then((winner) => {
+                      console.log("winner", winner);
 
-          if (snipe.reflipping) {
-            return false;
-          }
-          snipe.reflipping = true;
-          clearInterval(self.flipMonitorIntervals[msg.conversationId]);
-
-          if (ourChannel) {
-            // extract the name of the offender
-            // remove the offender from the team
-            // clear the interval
-            // run the flip again
-            self.bot1.chat.getFlipData(msg.conversationId,
-              msg.content.flip.flipConvId,
-              msg.id,
-              msg.content.flip.gameId).then((getFlipDataRes) => {
-              console.log("getflipdata res!");
-              console.log(getFlipDataRes);
-              const stdout = getFlipDataRes[1];
-              console.log(stdout);
-
-              const result: any = JSON.parse(stdout.trim()).result;
-              const errorInfo: any = result.status.errorInfo;
-              console.log(errorInfo);
-
-              if (Object.keys(result.status).indexOf("errorInfo") !== -1 && errorInfo.dupreg && errorInfo.dupreg.user) {
-                self.bot1.team.removeMember({
-                  team: msg.channel.name,
-                  username: errorInfo.dupreg.user,
-                }).then((removeMemberRes) => {
-                  snipe.chatSend(`We have punted ${errorInfo.dupreg.user} for duplicate registration issues`);
-                  self.flip(msg.channel);
+                      self.clearSnipe(winner);
+                    });
+                  } else {
+                    self.flip(msg.channel);
+                  }
                 });
-              } else if (result.status.phase === 2) {
-                console.log("results are in");
-                console.log(result.status.resultInfo.number);
-                clearInterval(self.flipMonitorIntervals[msg.conversationId]);
-                self.resolveFlip(result.status.resultInfo.number).then((winner) => {
-                  console.log("winner", winner);
-
-                  self.clearSnipe(winner);
-                });
-
-              } else {
-                self.flip(msg.channel);
-              }
-            });
-          } else {
-            let flipErrorMessage: string = "Due to error, we are going to re-cast the flip in a ";
-            flipErrorMessage += "separate subteam over which we have governance and can kick anyone ";
-            flipErrorMessage += "with a duplicate registration.";
-            snipe.chatSend(flipErrorMessage);
-            self.makeSubteamForFlip();
-          }
-        });
+            } else {
+              let flipErrorMessage: string = "Due to error, we are going to re-cast the flip in a ";
+              flipErrorMessage += "separate subteam over which we have governance and can kick anyone ";
+              flipErrorMessage += "with a duplicate registration.";
+              snipe.chatSend(flipErrorMessage);
+              self.makeSubteamForFlip();
+            }
+          });
       } catch (err) {
         self.cancelFlip(msg.conversationId, err);
       }
-    }), 5000);
+    }, 5000);
   }
 
   public adjustBlinds(): void {
     const now: number = +new Date();
-    const secondsElapsed: number = Math.floor((now - this.betting_started) / 1000);
+    const secondsElapsed: number = Math.floor((now - this.bettingStarted) / 1000);
     const minutesElapsed: number = Math.floor(secondsElapsed / 60.0);
     let blinds: number;
     if (minutesElapsed < 10) {
@@ -1004,15 +985,13 @@ class Snipe {
   }
 
   public runClock(): void {
-
-    const self = this;
+    const self: Snipe = this;
     const seconds: number = self.getTimeLeft();
 
     try {
       self.adjustBlinds();
       // :hourglass: :hourglass_flowing_sand:
       if (seconds % 5 === 0) {
-
         let hourglass: string;
         const lastDigit: string = JSON.stringify(seconds).slice(-1);
         if (lastDigit === "5") {
@@ -1021,30 +1000,35 @@ class Snipe {
           hourglass = ":hourglass_flowing_sand:";
         }
 
-        let stopsWhen: string = moment().to(self.betting_stops);
+        let stopsWhen: string = moment().to(self.bettingStops);
         if (seconds < 55) {
           stopsWhen = `in ${seconds} seconds`;
         }
         console.log(`attempting to edit message ${self.clock} in channel ${self.channel}`);
-        if (self.clock === null || typeof(self.clock) === "undefined") {
-          self.chatSend(hourglass + ` betting stops ${stopsWhen}`).then((sentMessage) => {
-            self.clock = sentMessage.id;
-          }).catch((e) => {
-            console.log(e);
-          });
+        if (self.clock === null || typeof self.clock === "undefined") {
+          self
+            .chatSend(hourglass + ` betting stops ${stopsWhen}`)
+            .then((sentMessage) => {
+              self.clock = sentMessage.id;
+            })
+            .catch((e) => {
+              console.log(e);
+            });
         } else {
-          self.bot1.chat.edit(self.channel, self.clock, {
-            message: {
-              body: hourglass + ` betting stops ${stopsWhen}`,
-            },
-          }).then((res) => {
-            console.log(res);
-          }).catch((e) => {
-            self.clock = null;
-            console.log(e);
-          });
+          self.bot1.chat
+            .edit(self.channel, self.clock, {
+              message: {
+                body: hourglass + ` betting stops ${stopsWhen}`,
+              },
+            })
+            .then((res) => {
+              console.log(res);
+            })
+            .catch((e) => {
+              self.clock = null;
+              console.log(e);
+            });
         }
-
       }
     } catch (e) {
       console.log("ran into error in runClock fxn, ", e);
@@ -1063,15 +1047,14 @@ class Snipe {
   }
 
   public buildPowerupsTable(whose: string): string {
-
     let table: string = "";
-    const self = this;
+    const self: Snipe = this;
     const powerupsCount: object = {};
 
     self.participants.forEach((bet: IParticipant) => {
       if (bet.powerup && bet.powerup.usedAt === null && bet.username === whose) {
         const awardJsonified: string = JSON.stringify(bet.powerup.award);
-        if (typeof(powerupsCount[awardJsonified]) === "undefined") {
+        if (typeof powerupsCount[awardJsonified] === "undefined") {
           powerupsCount[awardJsonified] = 0;
         }
         powerupsCount[awardJsonified] += 1;
@@ -1089,11 +1072,11 @@ class Snipe {
   }
 
   public checkTextForPowerup(msg: MessageSummary): void {
-    const self = this;
+    const self: Snipe = this;
     // would be better to have the regexp match object type
     const powerupsQuery: Array<any> = msg.content.text.body.match(/(\.powerups|🐶|:dog:)\s?@?(\w+)?/);
     if (powerupsQuery !== null) {
-      if (typeof(powerupsQuery[2]) !== "undefined") {
+      if (typeof powerupsQuery[2] !== "undefined") {
         const whose: string = powerupsQuery[1];
         if (self.positionSizes[whose] > 10) {
           self.positionSizes[whose] -= 10;
@@ -1113,8 +1096,10 @@ class Snipe {
       self.participants.forEach((bet: IParticipant) => {
         if (msg.sender.username === bet.username) {
           if (bet.powerup && bet.powerup.usedAt === null) {
-            if (msg.content.text.body.toLowerCase().indexOf(bet.powerup.award.reaction) !== -1
-                  || msg.content.text.body.indexOf(bet.powerup.award.emoji) !== -1) {
+            if (
+              msg.content.text.body.toLowerCase().indexOf(bet.powerup.award.reaction) !== -1 ||
+              msg.content.text.body.indexOf(bet.powerup.award.emoji) !== -1
+            ) {
               self.consumePowerup(bet.powerup);
             }
           }
@@ -1126,57 +1111,68 @@ class Snipe {
   public checkForFreeEntry(msg: MessageSummary): void {
     const reactionId: string = msg.id;
     const reactionContent: IReactionContent = msg.content;
-    const self = this;
+    const self: Snipe = this;
     // msg.sender.username
 
     console.log("-------------------------");
 
     console.log("Checking for free entry");
 
-    const freeEntryReactions = [":smile:", ":smiley:", ":raising_hand:", ":man-raising-hand:", ":woman-raising-hand:", ":thumbsup:", ":clap:", ":man-tipping-hand:", ":woman-tipping-hand:", ":sparkles:", ":zany_face:", ":+1:"];
+    const freeEntryReactions: Array<string> = [
+      ":smile:",
+      ":smiley:",
+      ":raising_hand:",
+      ":man-raising-hand:",
+      ":woman-raising-hand:",
+      ":thumbsup:",
+      ":clap:",
+      ":man-tipping-hand:",
+      ":woman-tipping-hand:",
+      ":sparkles:",
+      ":zany_face:",
+      ":+1:",
+    ];
     if (freeEntryReactions.includes(reactionContent.reaction.b)) {
-
       console.log("Emoji was included in the free entry list...");
 
       console.log(self.croupierMessages);
       console.log(reactionContent.reaction.m);
       if (Object.keys(self.croupierMessages).includes(reactionContent.reaction.m.toString())) {
-
         console.log("....key is included");
 
         if (!self.croupierMessages[reactionContent.reaction.m].includes(msg.sender.username)) {
-
           console.log("....username is not already included in this messages list");
 
-          if (!self.betting_open) {
+          if (!self.bettingOpen) {
             return;
           }
 
           self.croupierMessages[reactionContent.reaction.m].push(msg.sender.username);
           self.chatSend(`@${msg.sender.username} position++, thanks to positive energy!`);
-          self.addSnipeParticipant({
-            fromUsername: msg.sender.username,
-            amount: 0.01,
-            freeBet: true,
-          }, msg.sender.username);
+          self.addSnipeParticipant(
+            {
+              amount: 0.01,
+              freeBet: true,
+              fromUsername: msg.sender.username,
+            },
+            msg.sender.username,
+          );
           self.resetSnipeClock();
         }
-
       }
     }
-
   }
 
   public checkReactionForPowerup(msg: MessageSummary): void {
     const reactionId: string = msg.id;
     const reactionContent: IReactionContent = msg.content;
-    const self = this;
+    const self: Snipe = this;
 
     self.participants.forEach((bet: IParticipant) => {
       if (msg.sender.username === bet.username) {
         if (bet.powerup && bet.powerup.usedAt === null) {
           if (reactionContent.reaction.b === bet.powerup.award.reaction &&
-            reactionContent.reaction.m === bet.powerup.reactionId) {
+              reactionContent.reaction.m === bet.powerup.reactionId) {
             self.consumePowerup(bet.powerup);
           }
         }
@@ -1185,15 +1181,14 @@ class Snipe {
   }
 
   public findPotLead(): string {
-    const self = this;
+    const self: Snipe = this;
     return _.maxBy(_.keys(this.positionSizes), (username: string) => {
       return self.positionSizes[username];
     });
   }
 
   public consumePowerup(powerup: IPowerup): void {
-
-    const self = this;
+    const self: Snipe = this;
     let sassyMessage: string;
     const consumer: string = this.participants[powerup.participantIndex].username;
     const leader: string = this.findPotLead();
@@ -1207,7 +1202,6 @@ class Snipe {
         }).length;
 
         self.chatSend(`@${consumer} went nuclear.  Enjoy the show :fireworks:.`).then(() => {
-
           self.participants.forEach((participant) => {
             if (participant.powerup) {
               if (participant.powerup.usedAt === null) {
@@ -1234,7 +1228,7 @@ class Snipe {
         }, 1000 * 10);
         break;
       case "the-final-countdown":
-        self.betting_stops = moment().add(60, "seconds");
+        self.bettingStops = moment().add(60, "seconds");
         sassyMessage = `@${consumer} played The Final Countdown.  `;
         sassyMessage += `Will things ever be the same again?  60 seconds on the clock.  `;
         sassyMessage += `It's the final countdown.`;
@@ -1249,15 +1243,15 @@ class Snipe {
         sassyMessage += `  Everyone's positions are now equal.  One love.`;
         self.chatSend(sassyMessage);
         break;
-      case "half-life":  // Cut the remaining time in half
+      case "half-life": // Cut the remaining time in half
         const timeToSubtract: number = Math.floor(self.getTimeLeft() / 2.0);
-        self.betting_stops = self.betting_stops.subtract(timeToSubtract, "seconds");
+        self.bettingStops = self.bettingStops.subtract(timeToSubtract, "seconds");
         self.chatSend(`@${consumer} chopped ${timeToSubtract} seconds off the clock.`);
         doNotResetClock = true;
         break;
       case "double-life": // Double the remaining time
         const timeToAdd: number = Math.floor(self.getTimeLeft());
-        self.betting_stops = self.betting_stops.add(timeToAdd, "seconds");
+        self.bettingStops = self.bettingStops.add(timeToAdd, "seconds");
         self.chatSend(`@${consumer} added ${timeToAdd} seconds to the clock.`);
         doNotResetClock = true;
         break;
@@ -1273,7 +1267,7 @@ class Snipe {
         }
 
         sassyMessage = `@${consumer} called a popularity contest to challenge @${leader}'s throne!`;
-        sassyMessage +=  `  Whom do you prefer?  `;
+        sassyMessage += `  Whom do you prefer?  `;
         sassyMessage += `First to 3 votes wins `;
         sassyMessage += `(4 votes including the initial reaction seeded by me the Croupier)!`;
         self.chatSend(sassyMessage).then((msgData) => {
@@ -1315,12 +1309,12 @@ class Snipe {
   }
 
   public checkForPopularityContestVote(msg: MessageSummary): void {
-    if (typeof(this.popularityContests) === "undefined")  {
+    if (typeof this.popularityContests === "undefined") {
       return;
     }
     const reactionId: string = msg.id;
     const reactionContent: IReactionContent = msg.content;
-    const self = this;
+    const self: Snipe = this;
     this.popularityContests.forEach((contest) => {
       if (contest.pollMessageId === reactionContent.reaction.m) {
         if (reactionContent.reaction.b === contest.leader) {
@@ -1351,7 +1345,6 @@ class Snipe {
       });
     });
   }
-
 }
 
 export default Snipe;

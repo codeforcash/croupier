@@ -4,14 +4,15 @@ import * as Bot from "./keybase-bot";
 let croupier: Croupier;
 
 async function main(): Promise<any> {
-
-  croupier = new Croupier("devcroupier",
+  croupier = new Croupier(
+    "devcroupier",
     process.env.DEV_CROUPIER_PAPERKEY1,
     process.env.DEV_CROUPIER_PAPERKEY2,
     process.env.MONGODB_USERNAME,
     process.env.MONGODB_PASSWORD,
     process.env.MONGODB_HOST,
-    true);
+    true,
+  );
   await croupier.run(true);
 }
 
