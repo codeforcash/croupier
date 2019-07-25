@@ -39,6 +39,7 @@ class Croupier {
       mongoDbDatabase = "croupier";
     }
 
+    console.log("Talking to db: ", mongoDbDatabase);
     let uri: string;
     if (isCluster) {
       uri = "mongodb+srv://";
@@ -49,6 +50,7 @@ class Croupier {
     uri += `/${mongoDbDatabase}?retryWrites=true&w=majority`;
     this.mongoDbUri = uri;
 
+    console.log(uri);
     this.botUsername = botUsername;
 
     this.bot1 = new Bot(os.homedir());
@@ -97,7 +99,11 @@ class Croupier {
 
   public async checkWalletBalance(username: string): Promise<any> {
     const self: Croupier = this;
+    console.log("checking wallet balance");
+
     return new Promise(async (resolve) => {
+
+      console.log("inside promise");
       self.bot1.wallet
         .lookup(username)
         .then((acct) => {
@@ -111,13 +117,14 @@ class Croupier {
               resolve(balance);
             })
             .catch((e) => {
-              console.log(e);
-              throw e;
+              console.log("e2 error");
+              resolve(0);
             });
         })
         .catch((e) => {
-          console.log(e);
-          throw e;
+
+          console.log("...error");
+          resolve(0);
         });
     });
   }
@@ -219,56 +226,90 @@ class Croupier {
     });
   }
 
-  public processRefund(txn: Transaction, channel: ChatChannel): void {
+  public async processRefund(txn: Transaction, channel: ChatChannel): Promise<any> {
+
+    console.log("well we did call processRefund");
+
     const self: Croupier = this;
     const snipe: Snipe = this.activeSnipes[JSON.stringify(channel)];
     let refund: number;
 
-    console.log("refunding txn", txn);
-    this.calculateTransactionFees(txn)
-      .then((transactionFees) => {
-        console.log("not refunding txn fees", transactionFees);
-        refund = _.round(txn.amount - transactionFees, 7);
-        console.log("total refund is", refund);
-        snipe.moneySend(refund, txn.fromUsername);
-      })
-      .catch((e) => {
-        console.log("there was an error with the refund", e);
+    console.log("refunding txn");
 
-        self.bot1.chat.send(
-          {
-            name: `zackburt,${self.botUsername}`,
-            public: false,
-            topicType: "chat",
-          },
-          {
-            body: `There was an error processing a refund
+    return new Promise((resolve) => {
 
-        Snipe: ${snipe.snipeId}
-        Channel topic: ${channel.topicName}
-        Channel name: ${channel.name}
-        Amount: ${refund.toString()}
-        Recipient: ${txn.fromUsername}
-        Initial Txn Id: ${txn.txId}
+      console.log("inside refund promise");
 
-        ERRORS: ${e}`,
-          },
-          undefined,
-        );
-      });
+      this.calculateTransactionFees(txn)
+        .then((transactionFees) => {
+          console.log("not refunding txn fees", transactionFees);
+          refund = _.round(txn.amount - transactionFees, 7);
+          console.log("total refund is", refund);
+          snipe.moneySend(refund, txn.fromUsername).then(() => {
+            resolve();
+          });
+        })
+        .catch((e) => {
+          console.log("there was an error with the refund", e);
+
+          self.bot1.chat.send(
+            {
+              name: `zackburt,${self.botUsername}`,
+              public: false,
+              topicType: "chat",
+            },
+            {
+              body: `There was an error processing a refund
+
+          Snipe: ${snipe.snipeId}
+          Channel topic: ${channel.topicName}
+          Channel name: ${channel.name}
+          Amount: ${refund.toString()}
+          Recipient: ${txn.fromUsername}
+          Initial Txn Id: ${txn.txId}
+
+          ERRORS: ${e}`,
+            },
+            undefined,
+          );
+        });
+
+    });
+
   }
 
   public calculateTransactionFees(txn: Transaction): Promise<number> {
     const self: Croupier = this;
+
+    const now: number = +new Date();
+    const millisecondsElapsed: number = (now - txn.time);
+    let timeToWait: number;
+    if (millisecondsElapsed > 5000) {
+      timeToWait = 0;
+    } else {
+      timeToWait = 5000 - millisecondsElapsed;
+    }
+
+    console.log("time to Wait before calculating transaction fees", timeToWait);
+
     return new Promise((resolve) => {
-      self.bot1.wallet.details(txn.txId).then((details) => {
-        const xlmFeeMatch: Array<any> = details.feeChargedDescription.match(/(\d\.\d+) XLM/);
-        if (xlmFeeMatch !== null) {
-          const fee: number = parseFloat(xlmFeeMatch[1]);
-          console.log("fee", fee);
-          resolve(fee);
-        }
-      });
+
+      setTimeout(() => {
+
+        self.bot1.wallet.details(txn.txId).then((details) => {
+          const xlmFeeMatch: Array<any> = details.feeChargedDescription.match(/(\d\.\d+) XLM/);
+          if (xlmFeeMatch !== null) {
+            const fee: number = parseFloat(xlmFeeMatch[1]);
+            console.log("fee", fee);
+            resolve(fee);
+          }
+        }).catch((e) => {
+          console.log(e);
+          resolve(0.00001);
+        });
+
+      }, timeToWait);
+
     });
   }
 
