@@ -4,12 +4,21 @@ services:
         image: keybase_croupier:latest
         environment:
             BOT_OWNER: zackburt
-            CROUPIER_PAPERKEY_1: warrior laugh...redacted...
-            CROUPIER_PAPERKEY_2: warrior laugh...redacted...
-            MYSQL_HOST: croupier-cluster.redacted.us-east-1.rds.amazonaws.com
-            MYSQL_USER: croupier
-            MYSQL_PASSWORD: redacted
-            MYSQL_DB: croupier
+            MONGODB_USERNAME: croupier
+            MONGODB_PASSWORD: croupier.documentdb
+            MONGODB_HOST: redacted
+            DEV_CROUPIER_PAPERKEY1: redacted
+            DEV_CROUPIER_PAPERKEY2: redacted
+            TEST_CROUPIER_PAPERKEY1: redacted
+            TEST_CROUPIER_PAPERKEY2: redacted
+            CROUPIER_RINGO_USERNAME: croupierringo
+            CROUPIER_RINGO_PAPERKEY: redacted
+            CROUPIER_PAUL_USERNAME: croupierpaul
+            CROUPIER_PAUL_PAPERKEY: redacted
+            CROUPIER_JOHN_USERNAME: croupierjohn
+            CROUPIER_JOHN_PAPERKEY: redacted
+            CROUPIER_GEORGE_USERNAME: croupiergeorge
+            CROUPIER_GEORGE_PAPERKEY: redacted
         entrypoint: /home/keybase/scripts/start.sh
         restart: always
         volumes:

@@ -661,44 +661,49 @@ class Snipe {
     // check if the onBehalfOf user already has a wallet with bot.wallet.lookup(username);
     // if not, restrict the onBehalfOf wager to >= 2.01XLM, Keybase's minimum xfer for
     // new wallets
+
     self.croupier
-      .checkWalletBalance(recipient)
-      .then((balance) => {
-        if (balance === null || balance < 2.01) {
-          if (txn.amount < 2.02) {
-            let sassyMessage: string = `Betting on behalf of ${recipient}?  `;
-            sassyMessage += "Seems like they do not have a wallet yet, ";
-            sassyMessage += `so your bet must be at least 2.02XLM (was ${txn.amount})`;
-            self.chatSend(sassyMessage);
-            self.croupier.processRefund(txn, msg.channel);
-            resolve(false);
-          }
-        } else if (typeof self.positionSizes[txn.fromUsername] === "undefined") {
-          self.chatSend(`You cannot bet on behalf of ${recipient} unless you are participating as well`);
-          resolve(false);
-        } else {
-          self.addSnipeParticipant(txn, recipient);
-          self.chatSend(`@${recipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
-          self.bot1.chat.react(channel, msg.id, ":gift:", undefined);
-          resolve(true);
-        }
-      })
-      .catch((e) => {
-        console.log("Probably ran into a lookup error", e);
+    .checkWalletBalance(recipient)
+    .then((balance) => {
+
+      console.log(balance);
+      if (balance === null || balance < 2.01) {
         if (txn.amount < 2.02) {
+
+          console.log(txn.amount);
+          console.log(typeof txn.amount);
+
           let sassyMessage: string = `Betting on behalf of ${recipient}?  `;
           sassyMessage += "Seems like they do not have a wallet yet, ";
-          sassyMessage += `so your bet must be at least 2.02XLM (was ${txn.amount})`;
+          sassyMessage += `so your bet must be at least 2.02XLM `;
+          sassyMessage += `(was ${self.displayFixedNice(parseFloat(txn.amount))}XLM)`;
           self.chatSend(sassyMessage);
-          self.croupier.processRefund(txn, msg.channel);
-          resolve(false);
+          console.log("calling processRefund");
+          self.croupier.processRefund(txn, msg.channel).then(() => {
+            resolve(false);
+          }).catch((e) => {
+            console.log(e);
+          });
         } else {
           self.addSnipeParticipant(txn, recipient);
           self.chatSend(`@${recipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
           self.bot1.chat.react(channel, msg.id, ":gift:", undefined);
           resolve(true);
         }
-      });
+      } else if (typeof self.positionSizes[txn.fromUsername] === "undefined") {
+        self.chatSend(`You cannot bet on behalf of ${recipient} unless you are participating as well`);
+        resolve(false);
+      } else {
+        self.addSnipeParticipant(txn, recipient);
+        self.chatSend(`@${recipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
+        self.bot1.chat.react(channel, msg.id, ":gift:", undefined);
+        resolve(true);
+      }
+    }).catch((e) => {
+      // blank
+      console.log("ran into error", e);
+    });
+
   }
 
   public calculatePotSize(): number {
