@@ -1,7 +1,7 @@
 import * as os from "os";
 import Croupier from "../croupier";
-import * as Bot from "../keybase-bot";
-import { ChatChannel, MessageSummary, Transaction } from "../keybase-bot";
+import * as Bot from "keybase-bot";
+import { ChatChannel, MessageSummary, Transaction } from "keybase-bot";
 
 import {
   IBetData,

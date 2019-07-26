@@ -5,11 +5,11 @@ import * as mongodb from "mongodb";
 import * as os from "os";
 import * as throttledQueue from "throttled-queue";
 // @ts-ignore
-import * as Bot from "./keybase-bot";
+import * as Bot from "keybase-bot";
 import Snipe from "./snipe";
 
 // @ts-ignore
-import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
+import { ChatChannel, MessageSummary, Transaction } from "keybase-bot";
 import { IBetData, IBetList, IParticipant, IPopularityContest, IPositionSize, IPowerup, IPowerupAward, IReactionContent } from "./types";
 
 class Croupier {
@@ -77,7 +77,7 @@ class Croupier {
   }
 
   public async run(loadActiveSnipes: boolean): Promise<any> {
-    if (!this.bot1._service.initialized) {
+    if (!this.bot1.myInfo()) {
       await this.init();
     }
 

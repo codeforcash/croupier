@@ -1,0 +1,365 @@
+diff --git a/node_modules/keybase-bot/README.md b/node_modules/keybase-bot/README.md
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/chat-client/index.d.ts b/node_modules/keybase-bot/lib/chat-client/index.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/chat-client/index.js b/node_modules/keybase-bot/lib/chat-client/index.js
+old mode 100644
+new mode 100755
+index a9ea5a9..55aa600
+--- a/node_modules/keybase-bot/lib/chat-client/index.js
++++ b/node_modules/keybase-bot/lib/chat-client/index.js
+@@ -66,6 +66,15 @@ var child_process_1 = require("child_process");
+ var readline_1 = __importDefault(require("readline"));
+ var client_base_1 = __importDefault(require("../client-base"));
+ var utils_1 = require("../utils");
++
++// Custom variable, holds working directory of croupier bot
++var croupierDirectory = "";
++if (process.env.NODE_ENV === 'development') {
++  croupierDirectory = '.';
++} else {
++  croupierDirectory = '/home/keybase/croupier';
++}
++
+ /** The chat module of your Keybase bot. For more info about the API this module uses, you may want to check out `keybase chat api`. */
+ var Chat = /** @class */ (function (_super) {
+     __extends(Chat, _super);
+@@ -638,6 +647,104 @@ var Chat = /** @class */ (function (_super) {
+         };
+         lineReaderStdout.on('line', onLine);
+     };
++    // Custom Function that gets the result of flip command
++    Chat.prototype.getFlipData = function (conversationId, flipConversationId, msgId, gameId) {
++        console.log('working dir and homedir:');
++        console.log(this._workingDir);
++        console.log(this.homeDir);
++
++        const stdout = [];
++        const stderr = [];
++
++        const child = child_process_1.spawn(`${croupierDirectory}/scripts/getflipdata.sh`, [
++        conversationId,
++        flipConversationId,
++        msgId,
++        gameId,
++        this._workingDir,
++        this.homeDir,
++        ]);
++
++        return new Promise((resolve) => {
++            child.stdout.on('data', (data) => {
++                console.log(`stdout: ${data}`);
++                stdout.push(data.toString('utf8'));
++            });
++
++            child.stderr.on('data', (data) => {
++                console.log(`stderr: ${data}`);
++                stderr.push(data.toString('utf8'));
++            });
++
++            child.on('close', (code) => {
++                console.log(`child process exited with code ${code}`);
++                console.log('again, stdout:', stdout);
++                console.log('stdout length: ', stdout.length);
++                console.log('stdout 0', stdout[0]);
++                console.log('stdout 1', stdout[1]);
++                resolve([true, stdout[1], stderr]);
++            });
++
++            child.on('error', (err) => {
++                console.log(`child process errored with err ${err}`);
++                resolve([err, stdout, stderr]);
++            });
++        });
++    }
++    // Custom function that sends money to recipient
++    Chat.prototype.sendMoneyInChat = function (topic, team, amount, recipient, extraParams) {
++        return new Promise((resolve) => {
++            console.log('sendMoneyInChat: 1');
++            const child = child_process_1.spawn(`${croupierDirectory}/scripts/sendmoney.sh`, [
++                team,
++                topic,
++                amount,
++                recipient,
++                extraParams,
++                this._workingDir,
++                this.homeDir,
++            ]);
++
++            const errors = [];
++
++            child.stdout.on('data', (data) => {
++                console.log(`stdout: ${data}`);
++            });
++
++            child.stderr.on('data', (data) => {
++                console.log(`stderr: ${data}`);
++                errors.push(data);
++            });
++
++            child.on('close', (code) => {
++                console.log(`child process exited with code ${code}`);
++                resolve(code);
++            });
++
++            child.on('error', (err) => {
++                console.log(`child process errored with err ${err}`);
++                errors.push(err);
++                throw JSON.stringify(errors);
++            });
++        });
++    }
++    Chat.prototype.edit = async function(channel, messageId, options) {
++        await this._guardInitialized();
++        const args = { ...options, channel, messageId };
++        const res = await this._runApiCommand({
++        apiName: 'chat',
++        method: 'edit',
++        options: args,
++        });
++
++        if (!res) {
++        throw new Error('Keybase chat edit returned nothing');
++        }
++
++        return {
++        id: res.id,
++        };
++    }
+     return Chat;
+ }(client_base_1.default));
+ exports.default = Chat;
+diff --git a/node_modules/keybase-bot/lib/chat-client/index.js.map b/node_modules/keybase-bot/lib/chat-client/index.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/chat-client/types.d.ts b/node_modules/keybase-bot/lib/chat-client/types.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/chat-client/types.js b/node_modules/keybase-bot/lib/chat-client/types.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/chat-client/types.js.map b/node_modules/keybase-bot/lib/chat-client/types.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/client-base/index.d.ts b/node_modules/keybase-bot/lib/client-base/index.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/client-base/index.js b/node_modules/keybase-bot/lib/client-base/index.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/client-base/index.js.map b/node_modules/keybase-bot/lib/client-base/index.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/constants.d.ts b/node_modules/keybase-bot/lib/constants.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/constants.js b/node_modules/keybase-bot/lib/constants.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/constants.js.map b/node_modules/keybase-bot/lib/constants.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/index.d.ts b/node_modules/keybase-bot/lib/index.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/index.js b/node_modules/keybase-bot/lib/index.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/index.js.map b/node_modules/keybase-bot/lib/index.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/service/index.d.ts b/node_modules/keybase-bot/lib/service/index.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/service/index.js b/node_modules/keybase-bot/lib/service/index.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/service/index.js.map b/node_modules/keybase-bot/lib/service/index.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/team-client/index.d.ts b/node_modules/keybase-bot/lib/team-client/index.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/team-client/index.js b/node_modules/keybase-bot/lib/team-client/index.js
+old mode 100644
+new mode 100755
+index 4169821..26d7652
+--- a/node_modules/keybase-bot/lib/team-client/index.js
++++ b/node_modules/keybase-bot/lib/team-client/index.js
+@@ -52,6 +52,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
+ };
+ Object.defineProperty(exports, "__esModule", { value: true });
+ var client_base_1 = __importDefault(require("../client-base"));
++
++// Custom variable, holds working directory of croupier bot
++var croupierDirectory = "";
++if (process.env.NODE_ENV === 'development') {
++  croupierDirectory = '.';
++} else {
++  croupierDirectory = '/home/keybase/croupier';
++}
++
+ /** The wallet module of your Keybase bot. For more info about the API this module uses, you may want to check out `keybase wallet api`. */
+ var Team = /** @class */ (function (_super) {
+     __extends(Team, _super);
+@@ -139,6 +148,29 @@ var Team = /** @class */ (function (_super) {
+             });
+         });
+     };
++    Team.prototype.createSubteam = function (name) {
++        return new Promise((resolve) => {
++            const child = child_process.spawn(`${croupierDirectory}/scripts/createteam.sh`, [name, this._workingDir, this.homeDir]);
++
++            child.stdout.on('data', (data) => {
++                console.log(`stdout: ${data}`);
++            });
++
++            child.stderr.on('data', (data) => {
++                console.log(`stderr: ${data}`);
++            });
++
++            child.on('close', (code) => {
++                console.log(`child process exited with code ${code}`);
++                resolve(true);
++            });
++
++            child.on('error', (err) => {
++                console.log(`child process errored with err ${err}`);
++                resolve(false);
++            });
++        });
++    }
+     return Team;
+ }(client_base_1.default));
+ exports.default = Team;
+diff --git a/node_modules/keybase-bot/lib/team-client/index.js.map b/node_modules/keybase-bot/lib/team-client/index.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/team-client/types.d.ts b/node_modules/keybase-bot/lib/team-client/types.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/team-client/types.js b/node_modules/keybase-bot/lib/team-client/types.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/team-client/types.js.map b/node_modules/keybase-bot/lib/team-client/types.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/formatAPIObject.d.ts b/node_modules/keybase-bot/lib/utils/formatAPIObject.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/formatAPIObject.js b/node_modules/keybase-bot/lib/utils/formatAPIObject.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/formatAPIObject.js.map b/node_modules/keybase-bot/lib/utils/formatAPIObject.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/index.d.ts b/node_modules/keybase-bot/lib/utils/index.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/index.js b/node_modules/keybase-bot/lib/utils/index.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/index.js.map b/node_modules/keybase-bot/lib/utils/index.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/keybaseExec.d.ts b/node_modules/keybase-bot/lib/utils/keybaseExec.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/keybaseExec.js b/node_modules/keybase-bot/lib/utils/keybaseExec.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/keybaseExec.js.map b/node_modules/keybase-bot/lib/utils/keybaseExec.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/keybaseStatus.d.ts b/node_modules/keybase-bot/lib/utils/keybaseStatus.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/keybaseStatus.js b/node_modules/keybase-bot/lib/utils/keybaseStatus.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/keybaseStatus.js.map b/node_modules/keybase-bot/lib/utils/keybaseStatus.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/options.d.ts b/node_modules/keybase-bot/lib/utils/options.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/options.js b/node_modules/keybase-bot/lib/utils/options.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/options.js.map b/node_modules/keybase-bot/lib/utils/options.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/pingKeybaseService.d.ts b/node_modules/keybase-bot/lib/utils/pingKeybaseService.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/pingKeybaseService.js b/node_modules/keybase-bot/lib/utils/pingKeybaseService.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/pingKeybaseService.js.map b/node_modules/keybase-bot/lib/utils/pingKeybaseService.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/randomTempDir.d.ts b/node_modules/keybase-bot/lib/utils/randomTempDir.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/randomTempDir.js b/node_modules/keybase-bot/lib/utils/randomTempDir.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/randomTempDir.js.map b/node_modules/keybase-bot/lib/utils/randomTempDir.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/rmdirRecursive.d.ts b/node_modules/keybase-bot/lib/utils/rmdirRecursive.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/rmdirRecursive.js b/node_modules/keybase-bot/lib/utils/rmdirRecursive.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/rmdirRecursive.js.map b/node_modules/keybase-bot/lib/utils/rmdirRecursive.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/safeJSONStringify.d.ts b/node_modules/keybase-bot/lib/utils/safeJSONStringify.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/safeJSONStringify.js b/node_modules/keybase-bot/lib/utils/safeJSONStringify.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/safeJSONStringify.js.map b/node_modules/keybase-bot/lib/utils/safeJSONStringify.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/timeout.d.ts b/node_modules/keybase-bot/lib/utils/timeout.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/timeout.js b/node_modules/keybase-bot/lib/utils/timeout.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/timeout.js.map b/node_modules/keybase-bot/lib/utils/timeout.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/whichKeybase.d.ts b/node_modules/keybase-bot/lib/utils/whichKeybase.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/whichKeybase.js b/node_modules/keybase-bot/lib/utils/whichKeybase.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/utils/whichKeybase.js.map b/node_modules/keybase-bot/lib/utils/whichKeybase.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/wallet-client/index.d.ts b/node_modules/keybase-bot/lib/wallet-client/index.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/wallet-client/index.js b/node_modules/keybase-bot/lib/wallet-client/index.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/wallet-client/index.js.map b/node_modules/keybase-bot/lib/wallet-client/index.js.map
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/wallet-client/types.d.ts b/node_modules/keybase-bot/lib/wallet-client/types.d.ts
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/wallet-client/types.js b/node_modules/keybase-bot/lib/wallet-client/types.js
+old mode 100644
+new mode 100755
+diff --git a/node_modules/keybase-bot/lib/wallet-client/types.js.map b/node_modules/keybase-bot/lib/wallet-client/types.js.map
+old mode 100644
+new mode 100755

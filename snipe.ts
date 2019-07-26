@@ -4,12 +4,13 @@ import * as moment from "moment";
 import * as throttledQueue from "throttled-queue";
 import Croupier from "./croupier";
 // @ts-ignore
-import * as Bot from "./keybase-bot";
+import * as Bot from "keybase-bot";
 
 // @ts-ignore
-import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
+import { ChatChannel, MessageSummary, Transaction } from "keybase-bot";
 
 import { IBetData, IBetList, IParticipant, IPopularityContest, IPositionSize, IPowerup, IPowerupAward, IReactionContent } from "./types";
+import { AddMemberUsernameItem } from "keybase-bot/lib/team-client/types";
 
 type ThrottledChat = (message: string) => Promise<any>;
 type ThrottledMoneyTransfer = (xlmAmount: number, recipient: string) => Promise<any>;
@@ -101,11 +102,12 @@ class Snipe {
       this.clockRemaining = options.clockRemaining;
     }
 
-    const moneyThrottle: any = throttledQueue(1, 1000);
+    const moneyThrottle: any = throttledQueue(1, 1000, false);
     this.moneySend = (amount, recipient, extraParams = "") => {
       return new Promise((resolveMoneyThrottle) => {
         moneyThrottle(() => {
           try {
+            // @ts-ignore
             self.bot1.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient, extraParams);
             resolveMoneyThrottle();
           } catch (e) {
@@ -575,13 +577,14 @@ class Snipe {
       name: subteamName,
     };
 
+    // @ts-ignore
     self.bot1.team.createSubteam(subteamName).then((res) => {
       console.log("Subteam creation complete!", res);
       console.log("Attempting to add people to the team", usernamesToAdd);
       self.bot1.team
         .addMembers({
           team: subteamName,
-          usernames: usernamesToAdd,
+          usernames: usernamesToAdd as AddMemberUsernameItem[],
         })
         .then((addMembersRes) => {
           console.log("Adding people to the team was successful!", addMembersRes);
@@ -721,6 +724,7 @@ class Snipe {
   public redrawBettingTable(): void {
     const self: Snipe = this;
     if (this.bettingTable) {
+      // @ts-ignore
       this.bot1.chat.delete(this.channel, this.bettingTable, {}).then(() => {
         self.chatSend(self.buildBettingTable()).then((msg) => {
           self.bettingTable = msg.id;
@@ -750,6 +754,7 @@ class Snipe {
 
     this.bettingStops = moment().add(timerEndsInSeconds, "seconds");
 
+    // @ts-ignore
     this.bot1.chat.delete(this.channel, this.clock, {});
     const self: Snipe = this;
     const finalizeBetsTimeout: NodeJS.Timeout = setTimeout(() => {
@@ -918,6 +923,7 @@ class Snipe {
               // clear the interval
               // run the flip again
               self.bot1.chat
+                // @ts-ignore
                 .getFlipData(msg.conversationId, msg.content.flip.flipConvId, msg.id, msg.content.flip.gameId)
                 .then((getFlipDataRes) => {
                   console.log("getflipdata res!");
@@ -1006,7 +1012,7 @@ class Snipe {
         if (seconds < 55) {
           stopsWhen = `in ${seconds} seconds`;
         }
-        console.log(`attempting to edit message ${self.clock} in channel ${self.channel}`);
+        console.log(`attempting to edit message ${self.clock} in channel ${self.channel.name}`);
         if (self.clock === null || typeof self.clock === "undefined") {
           self
             .chatSend(hourglass + ` betting stops ${stopsWhen}`)
@@ -1018,6 +1024,7 @@ class Snipe {
             });
         } else {
           self.bot1.chat
+          //@ts-ignore
             .edit(self.channel, self.clock, {
               message: {
                 body: hourglass + ` betting stops ${stopsWhen}`,
@@ -1043,6 +1050,7 @@ class Snipe {
       }, 1000);
     } else {
       setTimeout(() => {
+        // @ts-ignore
         self.bot1.chat.delete(self.channel, self.clock, {});
       }, 1000);
     }

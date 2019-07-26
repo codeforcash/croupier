@@ -24,6 +24,6 @@
   },
   "rulesDirectory": [],
   "linterOptions": {
-    "exclude": ["scratchpad.ts", "__tests__/*"]
+    "exclude": ["scratchpad.ts", "__tests__/*", "node_modules/*"]
   }
 }

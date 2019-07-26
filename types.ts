@@ -1,4 +1,4 @@
-import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
+import { ChatChannel, MessageSummary, Transaction } from "keybase-bot";
 
 export interface IReactionContent {
   type: "reaction";
