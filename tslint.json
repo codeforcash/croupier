@@ -1,6 +1,5 @@
 {
   "defaultSeverity": "error",
-  "extends": ["tslint:recommended"],
   "jsRules": {},
   "rules": {
     "no-console": false,
@@ -23,5 +22,8 @@
       }
     ]
   },
-  "rulesDirectory": []
+  "rulesDirectory": [],
+  "linterOptions": {
+    "exclude": ["scratchpad.ts", "__tests__/*", "node_modules/*"]
+  }
 }

@@ -4,17 +4,20 @@ import * as moment from "moment";
 import * as mongodb from "mongodb";
 import * as os from "os";
 import * as throttledQueue from "throttled-queue";
-import * as Bot from "./keybase-bot";
+// @ts-ignore
+import * as Bot from "keybase-bot";
 import Snipe from "./snipe";
 
-import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
+// @ts-ignore
+import { ChatChannel, MessageSummary, Transaction } from "keybase-bot";
 import { IBetData, IBetList, IParticipant, IPopularityContest, IPositionSize, IPowerup, IPowerupAward, IReactionContent } from "./types";
 
 class Croupier {
   public activeSnipes: object;
   public bot1: Bot;
   public bot2: Bot;
-  public botUsername: string;
+  public botUsername1: string;
+  public botUsername2: string;
   public paperKey1: string;
   public paperKey2: string;
 
@@ -22,7 +25,8 @@ class Croupier {
   private mongoDbClient: mongodb.MongoClient;
 
   public constructor(
-    botUsername: string,
+    botUsername1: string,
+    botUsername2: string,
     paperKey1: string,
     paperKey2: string,
     mongoDbUsername: string,
@@ -46,14 +50,21 @@ class Croupier {
     } else {
       uri = "mongodb://";
     }
-    uri += `${mongoDbUsername}:${mongoDbPassword}@${mongoDbHost}`;
+    if (mongoDbUsername === "" && mongoDbPassword === "") {
+      uri += `${mongoDbHost}`;
+    } else {
+      uri += `${mongoDbUsername}:${mongoDbPassword}@${mongoDbHost}`
+    }
     uri += `/${mongoDbDatabase}?retryWrites=true&w=majority`;
+
     this.mongoDbUri = uri;
 
-    console.log(uri);
-    this.botUsername = botUsername;
+    this.botUsername1 = botUsername1;
+    this.botUsername2 = botUsername2;
 
+    // @ts-ignore
     this.bot1 = new Bot(os.homedir());
+    // @ts-ignore
     this.bot2 = new Bot(os.homedir());
     this.paperKey1 = paperKey1;
     this.paperKey2 = paperKey2;
@@ -61,13 +72,13 @@ class Croupier {
 
   public async init(): Promise<any> {
     this.activeSnipes = {};
-    await this.bot1.init(this.botUsername, this.paperKey1, null);
-    await this.bot2.init(this.botUsername, this.paperKey2, null);
+    await this.bot1.init(this.botUsername1, this.paperKey1, null);
+    await this.bot2.init(this.botUsername2, this.paperKey2, null);
     console.log("both paper keys initialized");
   }
 
   public async run(loadActiveSnipes: boolean): Promise<any> {
-    if (!this.bot1._service.initialized) {
+    if (!this.bot1.myInfo()) {
       await this.init();
     }
 
@@ -389,7 +400,7 @@ class Croupier {
     const snipe: Snipe = this.activeSnipes[JSON.stringify(channel)];
 
     // If the transaction was not sent to us, then ignore
-    if (txn.toUsername !== this.botUsername) {
+    if (txn.toUsername !== this.botUsername1) {
       return;
     }
 
@@ -485,7 +496,7 @@ class Croupier {
 
     this.bot1.chat.send(channel, {
       body: helpMsg,
-    });
+    }, {});
   }
 
   private routeIncomingMessage(msg: MessageSummary): void {
@@ -508,7 +519,7 @@ class Croupier {
       if (typeof snipe === "undefined") {
         return;
       }
-      if (msg.content.type === "flip" && msg.sender.username === this.botUsername) {
+      if (msg.content.type === "flip" && msg.sender.username === this.botUsername1) {
         snipe.monitorFlipResults(msg);
         return;
       }

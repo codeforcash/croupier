@@ -6,7 +6,7 @@
 // */
 
 import * as os from "os";
-import * as Bot from "./keybase-bot";
+import * as Bot from "keybase-bot";
 import * as _ from "lodash";
 
 import "source-map-support/register";
