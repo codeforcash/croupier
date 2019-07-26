@@ -3,8 +3,10 @@ import * as _ from "lodash";
 import * as moment from "moment";
 import * as throttledQueue from "throttled-queue";
 import Croupier from "./croupier";
+// @ts-ignore
 import * as Bot from "./keybase-bot";
 
+// @ts-ignore
 import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
 
 import { IBetData, IBetList, IParticipant, IPopularityContest, IPositionSize, IPowerup, IPowerupAward, IReactionContent } from "./types";
@@ -73,7 +75,7 @@ class Snipe {
       this.blinds = 0.01;
     }
 
-    const chatThrottle: any = throttledQueue(5, 5000);
+    const chatThrottle: any = throttledQueue(5, 5000, false);
 
     this.chatSend = (message) => {
       return new Promise((resolveChatThrottle) => {
@@ -109,7 +111,7 @@ class Snipe {
           } catch (e) {
             self.bot1.chat.send(
               {
-                name: `zackburt,${self.croupier.botUsername}`,
+                name: `zackburt,${self.croupier.botUsername1}`,
                 public: false,
                 topicType: "chat",
               },
@@ -422,7 +424,7 @@ class Snipe {
             } catch (e) {
               self.bot1.chat.send(
                 {
-                  name: `zackburt,${self.croupier.botUsername}`,
+                  name: `zackburt,${self.croupier.botUsername1}`,
                   public: false,
                   topicType: "chat",
                 },
@@ -478,7 +480,7 @@ class Snipe {
           } else {
             const w9url: string = "https://www.irs.gov/pub/irs-pdf/fw9.pdf";
             const w8benurl: string = "https://www.irs.gov/pub/irs-pdf/fw8ben.pdf";
-            const channelName: string = `zackburt,${self.croupier.botUsername},${winnerUsername}`;
+            const channelName: string = `zackburt,${self.croupier.botUsername1},${winnerUsername}`;
             const channel: ChatChannel = { name: channelName, public: false, topicType: "chat" };
 
             self.bot1.chat.send(
@@ -761,7 +763,7 @@ class Snipe {
     const self: Snipe = this;
     let message: string = `The round has begun (**#${self.snipeId}**).  `;
     message += `Bet in multiples of 0.01XLM.  Betting format:`;
-    message += `\`\`\`+0.01XLM@${self.croupier.botUsername}\`\`\``;
+    message += `\`\`\`+0.01XLM@${self.croupier.botUsername1}\`\`\``;
     message += `Minimum bet: 0.01XLM\n`;
     message += `Make 3 uninterrupted bets of **${this.displayFixedNice(self.blinds)}XLM**`;
     message += ` and receive a powerup!`;
@@ -1271,8 +1273,8 @@ class Snipe {
         sassyMessage += `First to 3 votes wins `;
         sassyMessage += `(4 votes including the initial reaction seeded by me the Croupier)!`;
         self.chatSend(sassyMessage).then((msgData) => {
-          const challengerReaction: Promise<any> = self.bot1.chat.react(self.channel, msgData.id, `${consumer}`);
-          const leaderReaction: Promise<any> = self.bot1.chat.react(self.channel, msgData.id, `${leader}`);
+          const challengerReaction: Promise<any> = self.bot1.chat.react(self.channel, msgData.id, `${consumer}`, {});
+          const leaderReaction: Promise<any> = self.bot1.chat.react(self.channel, msgData.id, `${leader}`, {});
           Promise.all([challengerReaction, leaderReaction]).then((values) => {
             self.popularityContests.push({
               challenger: consumer,

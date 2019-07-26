@@ -17,6 +17,9 @@
     "url": "https://github.com/codeforcash/croupier/issues"
   },
   "scripts": {
+    "start": "ts-node index.ts",
+    "dev": "NODE_ENV=development ts-node index.ts",
+    "lint": "tslint --project tslint.json",
     "test": "jest --runInBand"
   },
   "husky": {
@@ -38,6 +41,7 @@
     "@types/node": "^12.6.8",
     "alasql": "^0.4.11",
     "axios": "^0.19.0",
+    "dotenv": "^8.0.0",
     "forever": "^1.0.0",
     "lodash": "^4.17.15",
     "lodash.camelcase": "^4.3.0",
@@ -46,9 +50,11 @@
     "mkdirp": "0.5.1",
     "moment": "^2.24.0",
     "mongodb": "^3.2.7",
+    "patch-package": "^6.1.2",
     "prettier": "^1.18.2",
     "source-map-support": "^0.5.12",
     "throttled-queue": "^1.0.5",
+    "ts-node": "^8.3.0",
     "typescript": "^3.5.3"
   },
   "devDependencies": {
@@ -60,6 +66,7 @@
     "husky": ">=1",
     "jest": "^24.8.0",
     "lint-staged": ">=8",
-    "ts-jest": "^24.0.2"
+    "ts-jest": "^24.0.2",
+    "tslint": "^5.18.0"
   }
 }

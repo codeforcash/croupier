@@ -1,5 +1,4 @@
 
-
 function _interopDefault(ex) {
   return ex && typeof ex === 'object' && 'default' in ex ? ex.default : ex;
 }
@@ -18,7 +17,7 @@ const fs = require('fs');
 const fs__default = _interopDefault(fs);
 const path = _interopDefault(require('path'));
 
-if (process.env.DEVELOPMENT == 'true') {
+if (process.env.NODE_ENV === 'development') {
   var croupierDirectory = '.';
 } else {
   var croupierDirectory = '/home/keybase/croupier';
