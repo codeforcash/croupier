@@ -81,8 +81,15 @@ class Croupier {
   }
 
   public async shutdown(): Promise<any> {
+
+    const self: Croupier = this;
+
     for (const snipe of Object.values(this.activeSnipes)) {
       try {
+
+        await snipe.bot1.chat.send(snipe.channel, {
+          body: "Bot is going for immediate shutdown",
+        });
         clearTimeout(snipe.timeout);
         snipe.runClock = () => {
           // empty
@@ -247,33 +254,32 @@ class Croupier {
           console.log("total refund is", refund);
           snipe.moneySend(refund, txn.fromUsername).then(() => {
             resolve();
-          });
-        })
-        .catch((e) => {
-          console.log("there was an error with the refund", e);
+          }).catch((e) => {
 
-          self.bot1.chat.send(
-            {
-              name: `zackburt,${self.botUsername}`,
-              public: false,
-              topicType: "chat",
-            },
-            {
-              body: `There was an error processing a refund
+            console.log("there was an error with the refund", e);
 
-          Snipe: ${snipe.snipeId}
-          Channel topic: ${channel.topicName}
-          Channel name: ${channel.name}
-          Amount: ${refund.toString()}
-          Recipient: ${txn.fromUsername}
-          Initial Txn Id: ${txn.txId}
+            self.bot1.chat.send(
+              {
+                name: `zackburt,${self.botUsername}`,
+                public: false,
+                topicType: "chat",
+              },
+              {
+                body: `There was an error processing a refund
 
-          ERRORS: ${e}`,
-            },
-            undefined,
-          );
+            Snipe: ${snipe.snipeId}
+            Channel topic: ${channel.topicName}
+            Channel name: ${channel.name}
+            Amount: ${refund.toString()}
+            Recipient: ${txn.fromUsername}
+            Initial Txn Id: ${txn.txId}
+
+            ERRORS: ${e}`,
+              },
+              undefined,
+            );
         });
-
+      });
     });
 
   }
@@ -294,6 +300,10 @@ class Croupier {
 
     return new Promise((resolve) => {
 
+      // Temporary hack to always return 0.00001 for fees.
+      resolve(0.00001);
+      return;
+
       setTimeout(() => {
 
         self.bot1.wallet.details(txn.txId).then((details) => {
@@ -310,6 +320,28 @@ class Croupier {
 
       }, timeToWait);
 
+    });
+  }
+
+  public deleteSnipeLog(channel: ChatChannel): void {
+    const self: Croupier = this;
+    const snipe: Snipe = this.activeSnipes[JSON.stringify(channel)];
+
+    const myquery: object = { _id: snipe.snipeId };
+
+    self.mongoDbClient = new mongodb.MongoClient(this.mongoDbUri, {
+      reconnectInterval: 1000,
+      reconnectTries: Number.MAX_VALUE,
+      useNewUrlParser: true,
+    });
+    self.mongoDbClient.connect((err) => {
+      const collection: any = self.mongoDbClient.db("croupier").collection("snipes");
+      collection.deleteOne(myquery, (err2, res) => {
+        if (err2) {
+          throw err2;
+        }
+        self.mongoDbClient.close();
+      });
     });
   }
 
@@ -481,7 +513,7 @@ class Croupier {
 
     Have some feedback?  Message @zackburt here on Keybase.
     Filing a bug report or feature request?  Post on GitHub: https://github.com/codeforcash/croupier/issues/
-    Want to read the rules or start a game?  https://github.com/codeforcash/croupier/blob/master/RULES.md`;
+    Want to read the rules or start a game?  /keybase/team/codeforcash/CROUPIER-RULES.md`;
 
     this.bot1.chat.send(channel, {
       body: helpMsg,
@@ -514,6 +546,7 @@ class Croupier {
       }
       if (msg.content.type === "text" && msg.content.text.body) {
         snipe.checkTextForPowerup(msg);
+        snipe.checkForFreeEntry(msg);
       }
 
       if (msg.content.type === "reaction") {

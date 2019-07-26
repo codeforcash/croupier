@@ -34,7 +34,6 @@ class Snipe {
   public blinds: number;
   public bettingStarted: number;
   public popularityContests: Array<IPopularityContest>;
-  public potSizeStored: number;
   public clockRemaining: number;
   public freeze: string;
   public powerups: Array<IPowerupAward>;
@@ -143,10 +142,6 @@ class Snipe {
       this.positionSizes = options.position_sizes;
     } else {
       this.positionSizes = {};
-    }
-
-    if (options.potSize) {
-      this.potSizeStored = options.potSize;
     }
 
     if (options.snipeId) {
@@ -287,7 +282,7 @@ class Snipe {
         self.positionSizes[contest.leader] = challengerPositionSize;
         self.positionSizes[contest.challenger] = leaderPositionSize;
         let sassySwapMsg: string = `@${contest.challenger} and @${contest.leader} have swapped position sizes!`;
-        sassySwapMsg += `You can't buy your way to the top in this game!`;
+        sassySwapMsg += ` You can't buy your way to the top in this game!`;
         self.chatSend(sassySwapMsg);
 
         // TODO: could be dangerous to modify an array while looping over it?
@@ -325,6 +320,45 @@ class Snipe {
       this.bot1.chat.react(this.channel, msg.id, award.reaction, undefined);
       this.participants[participantIndex].powerup.reactionId = msg.id;
     });
+  }
+
+  public addSnipeParticipants(txn: Transaction, onBehalfOfList: Array<string>): Promise<any> {
+
+    const self: Snipe = this;
+    return new Promise((resolve) => {
+
+      let newParticipant: IParticipant;
+      onBehalfOfList.forEach((onBehalfOf) => {
+
+        if (typeof self.positionSizes[onBehalfOf] === "undefined") {
+          self.positionSizes[onBehalfOf] = Math.max(1, Math.floor(txn.amount / 0.01));
+        } else {
+          self.positionSizes[onBehalfOf] += Math.max(1, Math.floor(txn.amount / 0.01));
+        }
+      });
+
+      newParticipant = {
+        onBehalfOf: "here",
+        transaction: txn,
+        username: txn.fromUsername,
+      };
+      self.participants.push(newParticipant);
+
+      if (this.shouldIssuePowerup()) {
+        this.issuePowerup(self.participants.length - 1);
+      }
+
+      try {
+        self.croupier.updateSnipeLog(self.channel);
+      } catch (e) {
+        // Could not update database at this time
+        console.log("Could not update snipe log", e);
+      }
+
+      resolve(true);
+
+    });
+
   }
 
   public addSnipeParticipant(txn: Transaction, onBehalfOf?: string): void {
@@ -539,7 +573,7 @@ class Snipe {
     Object.keys(bettorRange).forEach((username) => {
       const chancePct: number = 100 * ((1 + (bettorRange[username][1] - bettorRange[username][0])) / maxValue);
 
-      bettingTable += `\n${bettorRank}. @${username}: \``;
+      bettingTable += `\n${bettorRank}. ${username}: \``;
       bettorRank += 1;
       if (bettorRange[username][0] === bettorRange[username][1]) {
         bettingTable += `${bettorRange[username][0]}\``;
@@ -555,16 +589,11 @@ class Snipe {
   public makeSubteamForFlip(): void {
     const self: Snipe = this;
     console.log("this.snipeId", this.snipeId);
-    const subTeamId: string = this.snipeId.substr(0, 11);
+    const subTeamId: string = String.prototype.toString.call(this.snipeId).substr(0, 11);
     const subteamName: string = `croupierflips.snipe${subTeamId}`;
-    const usernamesToAdd: Array<object> = [{ username: "croupier", role: "admin" }];
-
-    Object.keys(self.positionSizes).forEach((username) => {
-      usernamesToAdd.push({
-        role: "reader",
-        username,
-      });
-    });
+    const usernamesToAdd: Array<object> = [{
+       role: "admin", username: self.croupier.botUsername,
+    }];
 
     console.log("Creating the subteam", subteamName);
 
@@ -575,20 +604,28 @@ class Snipe {
 
     self.bot1.team.createSubteam(subteamName).then((res) => {
       console.log("Subteam creation complete!", res);
-      console.log("Attempting to add people to the team", usernamesToAdd);
+      console.log("Attempting to add self to the team", usernamesToAdd);
+
       self.bot1.team
         .addMembers({
           team: subteamName,
           usernames: usernamesToAdd,
-        })
-        .then((addMembersRes) => {
-          console.log("Adding people to the team was successful!", addMembersRes);
+        });
+
+      self.chatSend(`Anyone is free to join the subteam @${subteamName}.
+      Reflip is in 10 seconds.`);
+
+      setTimeout(() => {
+
+        try {
           self.flip(newSubteam);
-        })
-        .catch((e) => {
+        } catch (e) {
           console.log(e);
           self.flip(newSubteam);
-        });
+        }
+
+      }, 10 * 1000);
+
     });
   }
 
@@ -652,7 +689,12 @@ class Snipe {
   public processNewBetOnBehalfOf(txn: Transaction, msg: MessageSummary, recipient: string, resolve: any): void {
     const channel: ChatChannel = msg.channel;
     const self: Snipe = this;
+    const currentPotSize: number = this.calculatePotSize();
 
+    if (recipient === "here") {
+      self.processNewBetForChannel(txn, msg, resolve);
+      return;
+    }
     // check if the onBehalfOf user already has a wallet with bot.wallet.lookup(username);
     // if not, restrict the onBehalfOf wager to >= 2.01XLM, Keybase's minimum xfer for
     // new wallets
@@ -663,15 +705,18 @@ class Snipe {
 
       console.log(balance);
       if (balance === null || balance < 2.01) {
-        if (txn.amount < 2.02) {
+        if ((currentPotSize + txn.amount) <= 2.01) {
 
           console.log(txn.amount);
           console.log(typeof txn.amount);
 
+          const howMuchToBet: number = 2.01 - currentPotSize;
+
           let sassyMessage: string = `Betting on behalf of ${recipient}?  `;
           sassyMessage += "Seems like they do not have a wallet yet, ";
-          sassyMessage += `so your bet must be at least 2.02XLM `;
-          sassyMessage += `(was ${self.displayFixedNice(parseFloat(txn.amount))}XLM)`;
+          sassyMessage += `so in the event they win, they must win at least 2.01XLM. `;
+          sassyMessage += `Therefore, please bet at least ${howMuchToBet.toString()}XLM`;
+          sassyMessage += ` (plus a smidge extra to cover the transaction fees)`;
           self.chatSend(sassyMessage);
           console.log("calling processRefund");
           self.croupier.processRefund(txn, msg.channel).then(() => {
@@ -703,12 +748,7 @@ class Snipe {
 
   public calculatePotSize(): number {
     let sum: number;
-    if (this.potSizeStored) {
-      sum = this.potSizeStored;
-    } else {
-      sum = 0;
-    }
-
+    sum = 0;
     this.participants.forEach((participant) => {
       if (!participant.freeBet) {
         sum += parseFloat(participant.transaction.amount);
@@ -771,7 +811,7 @@ class Snipe {
     message += `Make 3 uninterrupted bets of **${this.displayFixedNice(self.blinds)}XLM**`;
     message += ` and receive a powerup!`;
     message += `\n\n**Please ensure you have read the rules before making any bets**  `;
-    message += `https://github.com/codeforcash/croupier/blob/master/RULES.md`;
+    message += `/keybase/team/codeforcash/CROUPIER-RULES.md`;
 
     self.chatSend(message);
 
@@ -891,7 +931,8 @@ class Snipe {
                 self.clearSnipe(winner);
               });
             } else {
-              console.log("results are NOT in", flipDetails);
+              // Do nothing.
+              console.log("results are NOT in");
             }
           })
           .catch((err) => {
@@ -1114,10 +1155,7 @@ class Snipe {
   }
 
   public checkForFreeEntry(msg: MessageSummary): void {
-    const reactionId: string = msg.id;
-    const reactionContent: IReactionContent = msg.content;
     const self: Snipe = this;
-    // msg.sender.username
 
     console.log("-------------------------");
 
@@ -1137,35 +1175,65 @@ class Snipe {
       ":zany_face:",
       ":+1:",
     ];
-    if (freeEntryReactions.includes(reactionContent.reaction.b)) {
-      console.log("Emoji was included in the free entry list...");
 
-      console.log(self.croupierMessages);
-      console.log(reactionContent.reaction.m);
-      if (Object.keys(self.croupierMessages).includes(reactionContent.reaction.m.toString())) {
-        console.log("....key is included");
+    let freeBet: boolean = false;
 
-        if (!self.croupierMessages[reactionContent.reaction.m].includes(msg.sender.username)) {
-          console.log("....username is not already included in this messages list");
+    if (msg.content.type === "reaction") {
+      const reactionId: string = msg.id;
+      const reactionContent: IReactionContent = msg.content;
 
-          if (!self.bettingOpen) {
-            return;
+      if (freeEntryReactions.includes(reactionContent.reaction.b)) {
+
+        // Has croupier sent a message with messageId == what the reaction is pointing to?
+        if (Object.keys(self.croupierMessages).includes(reactionContent.reaction.m.toString())) {
+
+          // Have we already counted this reaction?
+          if (!self.croupierMessages[reactionContent.reaction.m].includes(msg.sender.username)) {
+
+            self.croupierMessages[reactionContent.reaction.m].push(msg.sender.username);
+            freeBet = true;
+
           }
-
-          self.croupierMessages[reactionContent.reaction.m].push(msg.sender.username);
-          self.chatSend(`@${msg.sender.username} position++, thanks to positive energy!`);
-          self.addSnipeParticipant(
-            {
-              amount: 0.01,
-              freeBet: true,
-              fromUsername: msg.sender.username,
-            },
-            msg.sender.username,
-          );
-          self.resetSnipeClock();
         }
       }
+
+    } else {
+
+      freeEntryReactions.forEach((freeEntryReaction: string) => {
+
+        if (msg.content.body.includes(freeEntryReaction)) {
+          freeBet = true;
+        }
+
+      });
     }
+
+    if (freeBet) {
+      if (!self.bettingOpen) {
+        return;
+      }
+
+      // Encourage other people to join in
+      let positiveMessage: string = `@${msg.sender.username} position++, thanks to positive energy!  `;
+      positiveMessage += `Want in?  Just react accordingly`;
+      self.chatSend(positiveMessage).then((posPlusPlusMsg) => {
+        freeEntryReactions.forEach((freeEntryReaction: string) => {
+          self.bot1.chat.react(self.channel, posPlusPlusMsg.id, freeEntryReaction);
+        });
+      });
+
+      self.addSnipeParticipant(
+        {
+          amount: 0.01,
+          freeBet: true,
+          fromUsername: msg.sender.username,
+        },
+        msg.sender.username,
+      );
+      self.resetSnipeClock();
+
+    }
+
   }
 
   public checkReactionForPowerup(msg: MessageSummary): void {
@@ -1233,11 +1301,12 @@ class Snipe {
         }, 1000 * 10);
         break;
       case "the-final-countdown":
-        self.bettingStops = moment().add(60, "seconds");
         sassyMessage = `@${consumer} played The Final Countdown.  `;
         sassyMessage += `Will things ever be the same again?  60 seconds on the clock.  `;
         sassyMessage += `It's the final countdown.`;
-        self.chatSend(sassyMessage);
+        self.chatSend(sassyMessage).then(() => {
+          self.bettingStops = moment().add(60, "seconds");
+        });
         doNotResetClock = true;
         break;
       case "level-the-playing-field":
@@ -1348,6 +1417,40 @@ class Snipe {
           contest.votesForChallenger.splice(getIdx, 1);
         }
       });
+    });
+  }
+
+  private processNewBetForChannel(txn: Transaction, msg: MessageSummary, resolve: any): void {
+
+    const channel: ChatChannel = msg.channel;
+    const self: Snipe = this;
+
+    self.bot1.chat.react(channel, msg.id, ":gift:", undefined);
+
+    if (txn.amount < 2.01) {
+      self.chatSend("Please send >=2.01XLM for an @here snipe - just adding you instead");
+      self.addSnipeParticipant(txn);
+      resolve(true);
+      return;
+    }
+
+    self.bot1.team
+    .listTeamMemberships({
+      team: channel.name,
+    })
+    .then((res) => {
+      let allMembers: Array<string> = [];
+      allMembers = allMembers.concat(res.members.owners.map((u) => u.username));
+      allMembers = allMembers.concat(res.members.admins.map((u) => u.username));
+      allMembers = allMembers.concat(res.members.writers.map((u) => u.username));
+      allMembers = allMembers.concat(res.members.readers.map((u) => u.username));
+
+      self.addSnipeParticipants(txn, allMembers).then((res2) => {
+
+        resolve(true);
+
+      });
+
     });
   }
 }
