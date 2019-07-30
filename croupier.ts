@@ -247,46 +247,51 @@ class Croupier {
 
       console.log("inside refund promise");
 
-      this.calculateTransactionFees(txn)
-        .then((transactionFees) => {
-          console.log("not refunding txn fees", transactionFees);
-          refund = _.round(txn.amount - transactionFees, 7);
-          console.log("total refund is", refund);
-          snipe.moneySend(refund, txn.fromUsername).then(() => {
-            resolve();
-          }).catch((e) => {
+      setTimeout(() => {
 
-            console.log("there was an error with the refund", e);
+        console.log("inside refund timeout - at least 5s should have passed");
 
-            self.bot1.chat.send(
-              {
-                name: `zackburt,${self.botUsername}`,
-                public: false,
-                topicType: "chat",
-              },
-              {
-                body: `There was an error processing a refund
+        this.calculateTransactionFees(txn)
+          .then((transactionFees) => {
+            console.log("not refunding txn fees", transactionFees);
+            refund = _.round(txn.amount - transactionFees, 7);
+            console.log("total refund is", refund);
+            snipe.moneySend(refund, txn.fromUsername).then(() => {
+              resolve();
+            }).catch((e) => {
 
-            Snipe: ${snipe.snipeId}
-            Channel topic: ${channel.topicName}
-            Channel name: ${channel.name}
-            Amount: ${refund.toString()}
-            Recipient: ${txn.fromUsername}
-            Initial Txn Id: ${txn.txId}
+              console.log("there was an error with the refund", e);
 
-            ERRORS: ${e}`,
-              },
-              undefined,
-            );
+              self.bot1.chat.send(
+                {
+                  name: `zackburt,${self.botUsername}`,
+                  public: false,
+                  topicType: "chat",
+                },
+                {
+                  body: `There was an error processing a refund
+
+              Snipe: ${snipe.snipeId}
+              Channel topic: ${channel.topicName}
+              Channel name: ${channel.name}
+              Amount: ${refund.toString()}
+              Recipient: ${txn.fromUsername}
+              Initial Txn Id: ${txn.txId}
+
+              ERRORS: ${e}`,
+                },
+                undefined,
+              );
+          });
         });
-      });
+
+      }, self.MillisecondsToWaitForTransactionToSettle(txn));
+
     });
 
   }
 
-  public calculateTransactionFees(txn: Transaction): Promise<number> {
-    const self: Croupier = this;
-
+  public MillisecondsToWaitForTransactionToSettle(txn: Transaction): number {
     const now: number = +new Date();
     const millisecondsElapsed: number = (now - txn.time);
     let timeToWait: number;
@@ -295,8 +300,12 @@ class Croupier {
     } else {
       timeToWait = 5000 - millisecondsElapsed;
     }
-
     console.log("time to Wait before calculating transaction fees", timeToWait);
+    return timeToWait;
+  }
+
+  public calculateTransactionFees(txn: Transaction): Promise<number> {
+    const self: Croupier = this;
 
     return new Promise((resolve) => {
 
@@ -318,7 +327,7 @@ class Croupier {
           resolve(0.00001);
         });
 
-      }, timeToWait);
+      }, self.MillisecondsToWaitForTransactionToSettle(txn));
 
     });
   }
@@ -450,18 +459,20 @@ class Croupier {
       if (currentPotSize + thisBetSize >= 20000) {
         snipe.chatSend(`In order to make Croupier available within as many international territories as possible,
           pot sizes are limited to 20,000 XLM`);
-        setTimeout(() => {
-          this.processRefund(txn, channel);
-        }, 1000 * 5);
+        this.processRefund(txn, channel);
         return;
       }
 
       if (snipe.bettingOpen === false) {
         snipe.chatSend(`Betting has closed - refunding`);
         // Ensure the transaction is Completed before refunding
-        setTimeout(() => {
-          this.processRefund(txn, channel);
-        }, 1000 * 5);
+        this.processRefund(txn, channel);
+        return;
+      }
+
+      if (txn.amount < snipe.blinds) {
+        snipe.chatSend(`Bet was below blinds - refunding`);
+        this.processRefund(txn, channel);
         return;
       }
 

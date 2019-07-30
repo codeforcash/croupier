@@ -227,20 +227,6 @@ class Snipe {
       this.participants[count - 1].username === this.participants[count - 2].username &&
       this.participants[count - 2].username === this.participants[count - 3].username
     ) {
-      //  Don't grant powerups for free bets
-      if (this.participants[count - 3].freeBet || this.participants[count - 2].freeBet ||
-          this.participants[count - 1].freeBet) {
-        return false;
-      }
-
-      //  Don't grant a powerup if the bets were below blinds
-      if (
-        this.participants[count - 1].transaction.amount < self.blinds ||
-        this.participants[count - 2].transaction.amount < self.blinds ||
-        this.participants[count - 3].transaction.amount < self.blinds
-      ) {
-        return false;
-      }
 
       //  Get the index of the bet for which the most recent powerup was issued
       let lastPowerupIndex: number = 0;
@@ -1197,11 +1183,11 @@ class Snipe {
         }
       }
 
-    } else {
+    } else if (msg.content.type === "text" && msg.sender.username !== self.croupier.botUsername) {
 
       freeEntryReactions.forEach((freeEntryReaction: string) => {
 
-        if (msg.content.body.includes(freeEntryReaction)) {
+        if (msg.content.text.body.includes(freeEntryReaction)) {
           freeBet = true;
         }
 
@@ -1336,7 +1322,9 @@ class Snipe {
         break;
       case "popularity-contest":
         if (consumer === leader) {
-          self.chatSend(`You cannot challenge yourself in this game. ::powerup fizzles::`);
+          let pcFailMsg: string = `${consumer} played :dancers:, but you cannot challenge yourself in this game.`;
+          pcFailMsg += ` ::powerup fizzles::`;
+          self.chatSend(pcFailMsg);
           return;
         }
 
