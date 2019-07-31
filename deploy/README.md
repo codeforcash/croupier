@@ -11,7 +11,6 @@
 9. `docker build --no-cache -t keybase_croupier .`
 10. `docker-compose up -d croupier`
 
-
 ## Debugging issues
 
 1. Use `docker ps` to find the container id

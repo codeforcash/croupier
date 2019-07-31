@@ -49,6 +49,7 @@ class Snipe {
     this.runningClocks = {};
     this.flipMonitorIntervals = {};
     this.croupier = croupier;
+    this.croupier.channelSet.add(channel);
     this.channel = channel;
     this.bot1 = bots.bot1;
     this.bot2 = bots.bot2;

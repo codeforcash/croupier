@@ -18,6 +18,8 @@ class Croupier {
   public paperKey1: string;
   public paperKey2: string;
 
+  public channelSet: Set;
+
   private mongoDbUri: string;
   private mongoDbClient: mongodb.MongoClient;
 
@@ -57,6 +59,7 @@ class Croupier {
     this.bot2 = new Bot(os.homedir());
     this.paperKey1 = paperKey1;
     this.paperKey2 = paperKey2;
+    this.channelSet = new Set();
   }
 
   public async init(): Promise<any> {
@@ -67,12 +70,21 @@ class Croupier {
   }
 
   public async run(loadActiveSnipes: boolean): Promise<any> {
+    const self: Croupier = this;
     if (!this.bot1._service.initialized) {
       await this.init();
     }
 
     if (loadActiveSnipes) {
       this.activeSnipes = await this.loadActiveSnipes();
+      Object.keys(this.activeSnipes).forEach((ch: ChatChannel) => {
+        self.channelSet.add(ch);
+      });
+      self.channelSet.forEach((ch: ChatChannel) => {
+        self.bot1.chat.send(ch, {
+          body: "Croupier was just restarted",
+        }, undefined);
+      });
       console.log("active snipes loaded");
     }
 
@@ -84,20 +96,26 @@ class Croupier {
 
     const self: Croupier = this;
 
-    for (const snipe of Object.values(this.activeSnipes)) {
+    self.channelSet.forEach(async (channel: ChatChannel) => {
+
       try {
 
-        await snipe.bot1.chat.send(snipe.channel, {
+        await self.bot1.chat.send(channel, {
           body: "Bot is going for immediate shutdown",
-        });
-        clearTimeout(snipe.timeout);
-        snipe.runClock = () => {
-          // empty
-        };
+        }, undefined);
+        if (self.activeSnipes[channel]) {
+          const snipe: Snipe = self.activeSnipes[channel];
+          clearTimeout(snipe.timeout);
+          snipe.runClock = () => {
+            // empty
+          };
+        }
       } catch (e) {
         // empty
       }
-    }
+
+    });
+
     this.activeSnipes = {};
 
     await this.bot1.deinit();
