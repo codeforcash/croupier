@@ -1160,6 +1160,17 @@ class Snipe {
     }
   }
 
+  public countFreeBets(): number {
+    const self: Snipe = this;
+    let freeBets: number = 0;
+    self.participants.forEach((participant) => {
+      if (participant.transaction.freeBet) {
+        freeBets++;
+      }
+    });
+    return freeBets;
+  }
+
   public checkForFreeEntry(msg: MessageSummary): void {
     const self: Snipe = this;
 
@@ -1219,15 +1230,6 @@ class Snipe {
         return;
       }
 
-      // Encourage other people to join in
-      let positiveMessage: string = `@${msg.sender.username} position++, thanks to positive energy!  `;
-      positiveMessage += `Want in?  Just react accordingly`;
-      self.chatSend(positiveMessage).then((posPlusPlusMsg) => {
-        freeEntryReactions.forEach((freeEntryReaction: string) => {
-          self.bot1.chat.react(self.channel, posPlusPlusMsg.id, freeEntryReaction);
-        });
-      });
-
       self.addSnipeParticipant(
         {
           amount: 0.01,
@@ -1236,6 +1238,20 @@ class Snipe {
         },
         msg.sender.username,
       );
+
+      // Encourage other people to join in
+      let positiveMessage: string = `@${msg.sender.username} position++, thanks to positive energy!  `;
+      positiveMessage += `Want in?  Just react accordingly`;
+
+      self.chatSend(positiveMessage).then((posPlusPlusMsg) => {
+        const freeBetsCount: number = self.countFreeBets();
+        if (freeBetsCount === 1 || freeBetsCount % 10 === 0) {
+          freeEntryReactions.forEach((freeEntryReaction: string) => {
+            self.bot1.chat.react(self.channel, posPlusPlusMsg.id, freeEntryReaction, undefined);
+          });
+        }
+      });
+
       self.resetSnipeClock();
 
     }
