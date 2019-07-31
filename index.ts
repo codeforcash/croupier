@@ -1,9 +1,14 @@
+import * as Honeybadger from "honeybadger";
 import Croupier from "./croupier";
 import * as Bot from "./keybase-bot";
 
 let croupier: Croupier;
 
 async function main(): Promise<any> {
+
+  Honeybadger.configure({
+    apiKey: process.env.HONEYBADGER_API_KEY,
+  });
 
   process.env.DEVELOPMENT = "true";
 
@@ -26,5 +31,8 @@ async function shutDown(): Promise<any> {
 
 process.on("SIGINT", shutDown);
 process.on("SIGTERM", shutDown);
+process.on("uncaughtException", (exception) => {
+  Honeybadger.notify(exception);
+});
 
 main();
