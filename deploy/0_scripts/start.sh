@@ -16,4 +16,4 @@ git clone https://github.com/codeforcash/croupier.git
 cd croupier
 npm install
 tsc --lib es2015 index.ts
-node index.js
+node index.js 2>&1 >> /home/keybase/node_log
