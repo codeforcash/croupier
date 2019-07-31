@@ -464,6 +464,24 @@ class Snipe {
               console.log("emitting roundComplete event");
               self.emitter.emit("roundComplete");
               resolve();
+            }).catch((e) => {
+              self.bot1.chat.send(
+                {
+                  name: `zackburt,${self.croupier.botUsername}`,
+                  public: false,
+                  topicType: "chat",
+                },
+                {
+                  body: `There was an error sending money to a winner
+
+              Snipe: ${self.snipeId}
+              Winner: ${winnerUsername}
+              Amount: ${bounty.toString()}
+
+              ERRORS: ${e}`,
+                },
+                undefined,
+              );
             });
           }
         });
@@ -677,10 +695,12 @@ class Snipe {
     const self: Snipe = this;
     const currentPotSize: number = this.calculatePotSize();
 
+    // DISABLED until we can figure out how to find all the subscribers to a channel
     if (recipient === "here") {
-      self.processNewBetForChannel(txn, msg, resolve);
+      // self.processNewBetForChannel(txn, msg, resolve);
       return;
     }
+
     // check if the onBehalfOf user already has a wallet with bot.wallet.lookup(username);
     // if not, restrict the onBehalfOf wager to >= 2.01XLM, Keybase's minimum xfer for
     // new wallets
