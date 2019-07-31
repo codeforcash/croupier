@@ -18,10 +18,11 @@ class Croupier {
   public paperKey1: string;
   public paperKey2: string;
 
-  public channelSet: Set;
+  public channelSet: Set<ChatChannel>;
 
   private mongoDbUri: string;
   private mongoDbClient: mongodb.MongoClient;
+  private mongoDbDatabase: string;
 
   public constructor(
     botUsername: string,
@@ -32,16 +33,15 @@ class Croupier {
     mongoDbHost: string,
     isCluster: boolean,
   ) {
-    let mongoDbDatabase: string;
     if (process.env.TEST) {
-      mongoDbDatabase = "testcroupier";
+      this.mongoDbDatabase = "testcroupier";
     } else if (process.env.DEVELOPMENT) {
-      mongoDbDatabase = "devcroupier";
+      this.mongoDbDatabase = "devcroupier";
     } else {
-      mongoDbDatabase = "croupier";
+      this.mongoDbDatabase = "croupier";
     }
 
-    console.log("Talking to db: ", mongoDbDatabase);
+    console.log("Talking to db: ", this.mongoDbDatabase);
     let uri: string;
     if (isCluster) {
       uri = "mongodb+srv://";
@@ -49,7 +49,7 @@ class Croupier {
       uri = "mongodb://";
     }
     uri += `${mongoDbUsername}:${mongoDbPassword}@${mongoDbHost}`;
-    uri += `/${mongoDbDatabase}?retryWrites=true&w=majority`;
+    uri += `/${this.mongoDbDatabase}?retryWrites=true&w=majority`;
     this.mongoDbUri = uri;
 
     console.log(uri);
@@ -77,14 +77,28 @@ class Croupier {
 
     if (loadActiveSnipes) {
       this.activeSnipes = await this.loadActiveSnipes();
-      Object.keys(this.activeSnipes).forEach((ch: ChatChannel) => {
-        self.channelSet.add(ch);
-      });
-      self.channelSet.forEach((ch: ChatChannel) => {
-        self.bot1.chat.send(ch, {
-          body: "Croupier was just restarted",
-        }, undefined);
-      });
+
+      console.log("1) loaded activeSnipes");
+      console.log("2) ", this.activeSnipes);
+      try {
+
+        console.log("?");
+        Object.keys(this.activeSnipes).forEach((ch: ChatChannel) => {
+          self.channelSet.add(JSON.parse(ch));
+        });
+        console.log("x");
+        console.log("channelSet", self.channelSet);
+        self.channelSet.forEach((ch: ChatChannel) => {
+
+          self.bot1.chat.send(ch, {
+            body: "Croupier was just restarted",
+          }, undefined);
+        });
+
+      } catch (e3) {
+        console.log("e3", e3);
+      }
+
       console.log("active snipes loaded");
     }
 
@@ -179,14 +193,12 @@ class Croupier {
         useNewUrlParser: true,
       });
       self.mongoDbClient.connect((err) => {
-        const collection: any = self.mongoDbClient.db("croupier").collection("netGains");
+        const collection: any = self.mongoDbClient.db(self.mongoDbDatabase).collection("netGains");
         collection.updateOne({}, { $inc: netGains }, (err2, res) => {
           if (err2) {
             console.log("updateOne err", err2);
             throw err2;
           }
-
-          console.log("updateOne res", res);
 
           const projection: object = {};
           projection[winnerUsername] = 1;
@@ -223,7 +235,7 @@ class Croupier {
       cancellationReason = null;
     }
 
-    const myquery: object = { _id: snipe.snipeId };
+    const myquery: object = { _id: mongodb.ObjectID(snipe.snipeId) };
 
     const newvalues: object = {
       $set: {
@@ -241,7 +253,7 @@ class Croupier {
       useNewUrlParser: true,
     });
     self.mongoDbClient.connect((err) => {
-      const collection: any = self.mongoDbClient.db("croupier").collection("snipes");
+      const collection: any = self.mongoDbClient.db(self.mongoDbDatabase).collection("snipes");
       collection.updateOne(myquery, newvalues, (err2, res) => {
         if (err2) {
           throw err2;
@@ -354,7 +366,7 @@ class Croupier {
     const self: Croupier = this;
     const snipe: Snipe = this.activeSnipes[JSON.stringify(channel)];
 
-    const myquery: object = { _id: snipe.snipeId };
+    const myquery: object = { _id: mongodb.ObjectID(snipe.snipeId) };
 
     self.mongoDbClient = new mongodb.MongoClient(this.mongoDbUri, {
       reconnectInterval: 1000,
@@ -362,7 +374,7 @@ class Croupier {
       useNewUrlParser: true,
     });
     self.mongoDbClient.connect((err) => {
-      const collection: any = self.mongoDbClient.db("croupier").collection("snipes");
+      const collection: any = self.mongoDbClient.db(self.mongoDbDatabase).collection("snipes");
       collection.deleteOne(myquery, (err2, res) => {
         if (err2) {
           throw err2;
@@ -380,7 +392,9 @@ class Croupier {
     const blinds: number = snipe.blinds;
     const snipeId: string = snipe.snipeId;
 
-    const myquery: object = { _id: snipe.snipeId };
+    const myquery: object = { _id: mongodb.ObjectID(snipe.snipeId) };
+    console.log("myQuery", myquery);
+
     const newvalues: object = {
       $set: {
         blinds,
@@ -397,12 +411,21 @@ class Croupier {
       reconnectTries: Number.MAX_VALUE,
       useNewUrlParser: true,
     });
+
+    console.log("connecting to mongo db in updateSnipeLog");
+
     self.mongoDbClient.connect((err) => {
-      const collection: any = self.mongoDbClient.db("croupier").collection("snipes");
+
+      if (err) {
+        throw err;
+      }
+      const collection: any = self.mongoDbClient.db(self.mongoDbDatabase).collection("snipes");
       collection.updateOne(myquery, newvalues, (err2, res) => {
         if (err2) {
           throw err2;
         }
+        console.log("seems as if updateOne was successful", res);
+
         self.mongoDbClient.close();
       });
     });
@@ -417,7 +440,7 @@ class Croupier {
         useNewUrlParser: true,
       });
       self.mongoDbClient.connect((err) => {
-        const collection: any = self.mongoDbClient.db("croupier").collection("snipes");
+        const collection: any = self.mongoDbClient.db(self.mongoDbDatabase).collection("snipes");
         collection.insertOne(
           {
             bettingStarted: snipe.bettingStarted,
@@ -428,10 +451,10 @@ class Croupier {
           (err2, res) => {
             if (err2) {
               console.log(err2);
-              reject(err2);
+              throw err2;
             }
             self.mongoDbClient.close();
-            resolve(res.insertedId);
+            resolve(res.insertedId.toString());
           },
         );
       });
@@ -595,7 +618,7 @@ class Croupier {
     const self: Croupier = this;
     return new Promise((resolve) => {
       const snipes: object = {};
-      const myquery: object = { in_progress: 1 };
+      const myquery: object = { in_progress: 1, blinds: { $exists: true } };
       self.mongoDbClient = new mongodb.MongoClient(self.mongoDbUri, {
         reconnectInterval: 1000,
         reconnectTries: Number.MAX_VALUE,
@@ -606,11 +629,13 @@ class Croupier {
         if (err) {
           throw err;
         }
-        const collection: any = self.mongoDbClient.db("croupier").collection("snipes");
+        const collection: any = self.mongoDbClient.db(self.mongoDbDatabase).collection("snipes");
         collection.find(myquery).toArray((err2, results) => {
           if (err2) {
             throw err2;
           }
+
+          console.log(results);
 
           results.forEach((result) => {
             const channel: ChatChannel = result.channel;
@@ -629,7 +654,7 @@ class Croupier {
                 participants: JSON.parse(result.participants),
                 position_sizes: JSON.parse(result.position_sizes),
                 potSize: parseInt(result.potSize, 10),
-                snipeId: result._id,
+                snipeId: result._id.toString(),
               },
             );
           });

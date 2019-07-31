@@ -146,7 +146,7 @@ class Snipe {
     }
 
     if (options.snipeId) {
-      this.snipeId = options.snipeId;
+      this.snipeId = options.snipeId.toString();
     }
 
     this.timeout = null;
@@ -349,6 +349,9 @@ class Snipe {
   }
 
   public addSnipeParticipant(txn: Transaction, onBehalfOf?: string): void {
+
+    console.log("add snipe participant called");
+
     const self: Snipe = this;
     let newParticipant: IParticipant;
     let betBeneficiary: string;
@@ -379,7 +382,12 @@ class Snipe {
       this.issuePowerup(self.participants.length - 1);
     }
 
-    self.croupier.updateSnipeLog(self.channel);
+    try {
+      self.croupier.updateSnipeLog(self.channel);
+     } catch (e) {
+       console.log("was unable to successfully updateSnipeLog", e);
+     }
+    console.log("update snipe log called");
   }
 
   public clearSnipe(reason: string): void {
@@ -593,45 +601,58 @@ class Snipe {
 
   public makeSubteamForFlip(): void {
     const self: Snipe = this;
-    console.log("this.snipeId", this.snipeId);
-    const subTeamId: string = String.prototype.toString.call(this.snipeId).substr(0, 11);
-    const subteamName: string = `croupierflips.snipe${subTeamId}`;
-    const usernamesToAdd: Array<object> = [{
-       role: "admin", username: self.croupier.botUsername,
-    }];
 
-    console.log("Creating the subteam", subteamName);
+    try {
 
-    const newSubteam: ChatChannel = {
-      membersType: "team",
-      name: subteamName,
-    };
+      console.log("this.snipeId", this.snipeId);
+      console.log("typeof this.snipeId", typeof(this.snipeId));
 
-    self.bot1.team.createSubteam(subteamName).then((res) => {
-      console.log("Subteam creation complete!", res);
-      console.log("Attempting to add self to the team", usernamesToAdd);
+      const subTeamId: string = this.snipeId.substr(0, 11);
+      const subteamName: string = `croupierflips.snipe${subTeamId}`;
+      const usernamesToAdd: Array<object> = [{
+         role: "admin", username: self.croupier.botUsername,
+      }];
 
-      self.bot1.team
-        .addMembers({
-          team: subteamName,
-          usernames: usernamesToAdd,
-        });
+      console.log("Creating the subteam", subteamName);
 
-      self.chatSend(`Anyone is free to join the subteam @${subteamName}.
-      Reflip is in 10 seconds.`);
+      const newSubteam: ChatChannel = {
+        membersType: "team",
+        name: subteamName,
+      };
 
-      setTimeout(() => {
+      self.bot1.team.createSubteam(subteamName).then((res) => {
+        console.log("Subteam creation complete!", res);
+        console.log("Attempting to add self to the team", usernamesToAdd);
 
-        try {
-          self.flip(newSubteam);
-        } catch (e) {
-          console.log(e);
-          self.flip(newSubteam);
-        }
+        self.bot1.team
+          .addMembers({
+            team: subteamName,
+            usernames: usernamesToAdd,
+          });
 
-      }, 10 * 1000);
+        self.chatSend(`Anyone is free to join the subteam @${subteamName}.
+        Reflip is in 10 seconds.`);
 
-    });
+        setTimeout(() => {
+
+          try {
+            self.flip(newSubteam);
+          } catch (e) {
+            console.log(e);
+            self.flip(newSubteam);
+          }
+
+        }, 10 * 1000);
+
+      }).catch((e) => {
+
+        console.log("Unfortunately could not create the subteam, due to ", e);
+
+      });
+
+    } catch (e2) {
+      console.log("ran into issue:", e2);
+    }
   }
 
   public flip(whereToFlip: ChatChannel): void {
@@ -678,6 +699,8 @@ class Snipe {
     const onBehalfOfMatch: Array<any> = msg.content.text.body.match(/(for|4):?\s?@?(\w+@?(\w+)?)/i);
 
     const self: Snipe = this;
+
+    console.log("process new bet");
 
     return new Promise((resolve) => {
       if (onBehalfOfMatch !== null) {
