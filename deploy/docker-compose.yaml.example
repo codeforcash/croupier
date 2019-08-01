@@ -20,6 +20,7 @@ services:
             CROUPIER_GEORGE_USERNAME: croupiergeorge
             CROUPIER_GEORGE_PAPERKEY: redacted
             HONEYBADGER_API_KEY: redacted
+            SUBTEAM_NAME: redacted
         entrypoint: /home/keybase/scripts/start.sh
         restart: always
         volumes:

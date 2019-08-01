@@ -599,39 +599,46 @@ class Snipe {
     return bettingTable;
   }
 
+  public subteamName(): string {
+
+    console.log("this.snipeId", this.snipeId);
+    console.log("typeof this.snipeId", typeof(this.snipeId));
+
+    const subTeamId: string = this.snipeId.substr(0, 11);
+    return `${process.env.SUBTEAM_NAME}.snipe${subTeamId}`;
+
+  }
+
   public makeSubteamForFlip(): void {
     const self: Snipe = this;
 
     try {
 
-      console.log("this.snipeId", this.snipeId);
-      console.log("typeof this.snipeId", typeof(this.snipeId));
-
-      const subTeamId: string = this.snipeId.substr(0, 11);
-      const subteamName: string = `croupierflips.snipe${subTeamId}`;
       const usernamesToAdd: Array<object> = [{
          role: "admin", username: self.croupier.botUsername,
       }];
 
-      console.log("Creating the subteam", subteamName);
+      console.log("Creating the subteam", self.subteamName());
 
       const newSubteam: ChatChannel = {
         membersType: "team",
-        name: subteamName,
+        name: self.subteamName(),
       };
 
-      self.bot1.team.createSubteam(subteamName).then((res) => {
+      self.bot1.team.createSubteam(self.subteamName()).then((res) => {
         console.log("Subteam creation complete!", res);
         console.log("Attempting to add self to the team", usernamesToAdd);
 
         self.bot1.team
           .addMembers({
-            team: subteamName,
+            team: self.subteamName(),
             usernames: usernamesToAdd,
           });
 
-        self.chatSend(`Anyone is free to join the subteam @${subteamName}.
-        Reflip is in 10 seconds.`);
+        self.chatSend(`Anyone is free to join the subteam @${self.subteamName()} ...
+        Reflip is in 30 seconds.`).then((sentChat) => {
+          self.bot1.chat.react(self.channel, sentChat.id, "Invite Me", undefined);
+        });
 
         setTimeout(() => {
 
@@ -642,7 +649,7 @@ class Snipe {
             self.flip(newSubteam);
           }
 
-        }, 10 * 1000);
+        }, 30 * 1000);
 
       }).catch((e) => {
 
@@ -815,7 +822,12 @@ class Snipe {
     let boost: number;
     let timerEndsInSeconds: number;
     if (timeRemaining <= 30) {
-      timerEndsInSeconds = 60;
+      if (process.env.TEST) {
+        // If we're in the test suite, don't add time to the clock
+        timerEndsInSeconds = timeRemaining;
+      } else {
+        timerEndsInSeconds = 60;
+      }
     } else {
       boost = 10;
       timerEndsInSeconds = timeRemaining + boost;
@@ -939,7 +951,9 @@ class Snipe {
   }
 
   public getOriginChannel(channelName: string): ChatChannel {
-    const channelMatch: Array<any> = channelName.match(/croupierflips.snipe(\d+)/);
+
+    const subteamMatch: RegExp = new RegExp(`{process.env.SUBTEAM_NAME}\.snipe(\d+)`);
+    const channelMatch: Array<any> = channelName.match(subteamMatch);
     const snipeId: number = parseInt(channelMatch[1], 10);
     return this.getChannelFromSnipeId(snipeId);
   }
@@ -968,7 +982,8 @@ class Snipe {
           .catch((err) => {
             console.log("Error: ", err);
 
-            const channelMatch: Array<any> = msg.channel.name.match(/croupierflips.snipe(\d+)/);
+            const subteamMatch: RegExp = new RegExp(`${process.env.SUBTEAM_NAME}\.snipe(\d+)`);
+            const channelMatch: Array<any> = msg.channel.name.match(subteamMatch);
             if (channelMatch === null) {
               snipe = self.croupier.activeSnipes[JSON.stringify(msg.channel)];
               ourChannel = false;
@@ -1193,6 +1208,33 @@ class Snipe {
       }
     });
     return freeBets;
+  }
+
+  public checkForJoiningRoom(msg: MessageSummary): void {
+
+    const self: Snipe = this;
+    const reactionId: string = msg.id;
+    const reactionContent: IReactionContent = msg.content;
+
+    console.log(JSON.stringify(reactionContent));
+    if (reactionContent.reaction.b === "Invite Me") {
+
+      const usernamesToAdd: Array<object> = [{
+         role: "writer", username: msg.sender.username,
+      }];
+
+      const newSubteam: ChatChannel = {
+        membersType: "team",
+        name: self.subteamName(),
+      };
+
+      self.bot1.team
+        .addMembers({
+          team: self.subteamName(),
+          usernames: usernamesToAdd,
+        });
+    }
+
   }
 
   public checkForFreeEntry(msg: MessageSummary): void {

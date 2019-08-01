@@ -5,9 +5,9 @@
 
 // */
 
+import * as _ from "lodash";
 import * as os from "os";
 import * as Bot from "./keybase-bot";
-import * as _ from "lodash";
 
 import "source-map-support/register";
 
@@ -16,41 +16,18 @@ const bot: Bot = new Bot(os.homedir());
 const botUsername: string = "zackburt2";
 const paperkey: string = process.env.ZACKBURT2_PAPERKEY;
 
-
-async function main() {
+async function main(): void {
 
   await bot.init(botUsername, paperkey);
-	console.log('initialized.');
-
-
-  await bot.chat.watchAllChannelsForNewMessages(
-    async (msg) => {
-      try {
-        console.log(msg);
-        if (msg.content.type === "flip") {
-          return;
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    },
-    (e) => console.error(e),
-  );
+  console.log("initialized.");
 }
 
 main();
-
-// {"method": "send", "params": {"options": {"channel": {"name": "mkbot", "members_type": "team", "topic_name": "test3"}, "message": {"body": "test"}}}}
-
 
 // conversationId: '',
 //   flipConvId: '',
 //   msgId: 7474,
 //   gameId: ''
-
-// keybase chat api -m '{"method": "loadflip", "params": {"options": {"conversation_id": "000044e620fef1e84b623350faff06ebef7a0cd7e403ba81a1b35d311976b9f6", "flip_conversation_id": "000076eed094f4f90020f18a058e772948a2666f0fd638570e2cd80925f51d67", "msg_id": 7474, "game_id": "5982849cac921d68528468ac"}}}'
-
-
 
   // const channel: object = {
   //   membersType: "team", name: "mkbot", public: false, topicName: "test3", topicType: "chat",
@@ -64,7 +41,6 @@ main();
   //     console.log('this is the msg id from the reaction itself....', msgId.id);
   //   });
   // })
-
 
 // function monitorFlip(msg) {
 //   try {
@@ -82,9 +58,7 @@ main();
 //     console.log('err', err);
 //   }
 
-
 // }
-
 
 // function makeSubteamForFlip(): void {
 

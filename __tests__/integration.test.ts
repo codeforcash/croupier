@@ -24,19 +24,19 @@ function timeout(time: number): Promise<void> {
 
 describe("Betting Functionality", (): void => {
 
-  const botUsername = "testcroupier";
+  const botUsername: string = "testcroupier";
 
-  const ringo = new Bot();
-  const paul = new Bot();
-  const john = new Bot();
-  const george = new Bot();
+  const ringo: Bot = new Bot();
+  const paul: Bot = new Bot();
+  const john: Bot = new Bot();
+  const george: Bot = new Bot();
 
-  let ringoBalance;
-  let johnBalance;
+  let ringoBalance: number;
+  let johnBalance: number;
 
   process.env.DEVELOPMENT = undefined;
   process.env.TEST = "true";
-  const croupier = new Croupier(botUsername,
+  const croupier: Croupier = new Croupier(botUsername,
     process.env.TEST_CROUPIER_PAPERKEY1,
     process.env.TEST_CROUPIER_PAPERKEY2,
     process.env.MONGODB_USERNAME,
@@ -45,15 +45,15 @@ describe("Betting Functionality", (): void => {
     true);
 
   const channel: ChatChannel = {
+    membersType: "team",
     name: "codeforcash.croupiertest",
     public: false,
-    topicType: "chat",
-    membersType: "team",
     topicName: "general",
+    topicType: "chat",
   };
 
-  const testStart = +new Date();
-  const testStartRe = new RegExp(testStart.toString());
+  const testStart: number = +new Date();
+  const testStartRe: RegExp = new RegExp(testStart.toString());
 
   beforeAll(async (done): Promise<void> => {
 
@@ -96,15 +96,16 @@ describe("Betting Functionality", (): void => {
 
     it("starts a new snipe", async (): Promise<void> => {
       jest.setTimeout(60000);
-      const exitCode = await ringo.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername, "countdown:30");
+      const exitCode: any = await ringo.chat.sendMoneyInChat(channel.topicName,
+        channel.name, "0.01", botUsername, "countdown:30");
       console.log("exitCode", exitCode);
       await timeout(10000);
-      const readResponse = await paul.chat.read(channel);
-      let foundMongoIdRegex = false;
-      let messageWithinTest = false;
+      const readResponse: any = await paul.chat.read(channel);
+      let foundMongoIdRegex: boolean = false;
+      let messageWithinTest: boolean = false;
       for (const msg of readResponse.messages.reverse()) {
         if (msg.content.type === "text") {
-          const msgContent = msg.content.text.body;
+          const msgContent: string = msg.content.text.body;
           if (testStartRe.test(msgContent)) {
             messageWithinTest = true;
           }
@@ -123,11 +124,11 @@ describe("Betting Functionality", (): void => {
       // jest.useFakeTimers()
       jest.setTimeout(300000);
       expect.assertions(1);
-      const exitCode = await john.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername);
+      const exitCode: any = await john.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername);
 
-      const snipe = Object.values(croupier.activeSnipes)[0];
+      const snipe: Snipe = Object.values(croupier.activeSnipes)[0];
 
-      let winnerPaid = false;
+      let winnerPaid: boolean = false;
       console.log("beforePromise");
       await new Promise((resolveRoundComplete) => {
         snipe.emitter.on("roundComplete", async () => {
@@ -137,8 +138,57 @@ describe("Betting Functionality", (): void => {
           // wait 10s for the payout to settle
           await timeout(10000);
 
-          const newRingoBalance = await croupier.checkWalletBalance(process.env.CROUPIER_RINGO_USERNAME);
-          const newJohnBalance = await croupier.checkWalletBalance(process.env.CROUPIER_JOHN_USERNAME);
+          const newRingoBalance: number = await croupier.checkWalletBalance(process.env.CROUPIER_RINGO_USERNAME);
+          const newJohnBalance: number = await croupier.checkWalletBalance(process.env.CROUPIER_JOHN_USERNAME);
+          console.log("check wallet balance event complete");
+
+          console.log("Ringo", newRingoBalance, ringoBalance);
+          console.log("John", newJohnBalance, johnBalance);
+
+          if (newRingoBalance > ringoBalance || newJohnBalance > johnBalance) {
+            winnerPaid = true;
+          }
+
+          resolveRoundComplete();
+
+        });
+      });
+      console.log("afterPromise");
+      expect(winnerPaid).toBe(true);
+
+    });
+
+    // TODO: refactor this and above test into just one test
+    it("handles duplicate registrations just fine", async () => {
+
+      jest.setTimeout(300000);
+      expect.assertions(1);
+
+      ringoBalance = await croupier.checkWalletBalance(process.env.CROUPIER_RINGO_USERNAME);
+      johnBalance = await croupier.checkWalletBalance(process.env.CROUPIER_JOHN_USERNAME);
+
+      const duplicateRegistrationJohn: Bot = new Bot();
+      await duplicateRegistrationJohn.init(process.env.CROUPIER_JOHN_USERNAME, process.env.CROUPIER_JOHN_PAPERKEY);
+
+      await ringo.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername, "countdown:30");
+      await timeout(10000);
+      const exitCode: any = await john.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername);
+      const snipe: Snipe = Object.values(croupier.activeSnipes)[0];
+
+      let winnerPaid: boolean = false;
+
+      console.log("bp");
+      await new Promise((resolveRoundComplete) => {
+        console.log("wp");
+        snipe.emitter.on("roundComplete", async () => {
+
+          console.log("roundComplete event emitted");
+
+          // wait 10s for the payout to settle
+          await timeout(10000);
+
+          const newRingoBalance: number = await croupier.checkWalletBalance(process.env.CROUPIER_RINGO_USERNAME);
+          const newJohnBalance: number = await croupier.checkWalletBalance(process.env.CROUPIER_JOHN_USERNAME);
           console.log("check wallet balance event complete");
 
           console.log("Ringo", newRingoBalance, ringoBalance);

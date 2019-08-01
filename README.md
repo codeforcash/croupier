@@ -13,6 +13,7 @@
    - `MONGODB_PASSWORD`
    - `MONGODB_HOST`
    - `HONEYBADGER_API_KEY` # for uncaught exception logging. feel free to use another solution; see index.ts
+   - `SUBTEAM_NAME` # in the event that a flip does not complete, either due to duplicate registration issues or someone joining/leaving during the flip, Croupier will initiate a new flip in a separate team under its control. Therefore, you should create a Keybase team and invite your bot and give it admin privileges (so it may dynamically create subteams for the re flips).
 
 5. Run the bot with `ts-node index.ts`
 

@@ -424,7 +424,6 @@ class Croupier {
         if (err2) {
           throw err2;
         }
-        console.log("seems as if updateOne was successful", res);
 
         self.mongoDbClient.close();
       });
@@ -575,7 +574,7 @@ class Croupier {
   private routeIncomingMessage(msg: MessageSummary): void {
     const self: Croupier = this;
     try {
-      const snipe: Snipe = this.activeSnipes[JSON.stringify(msg.channel)];
+      let snipe: Snipe = this.activeSnipes[JSON.stringify(msg.channel)];
 
       if (msg.channel.membersType === "impteamnative") {
         this.respondToDM(msg);
@@ -589,9 +588,23 @@ class Croupier {
       if (msg.content.type === "text" && msg.content.text.payments && msg.content.text.payments.length === 1) {
         this.extractTxn(msg);
       }
+
       if (typeof snipe === "undefined") {
-        return;
+
+        // Check whether we're in a subteam of an active snipe
+        // Potential source of application slowdown?
+        Object.keys(this.activeSnipes).forEach((stringifiedChannel: string) => {
+          const potentialSnipe: Snipe = this.activeSnipes[stringifiedChannel];
+          if (potentialSnipe && msg.channel.name === potentialSnipe.subteamName()) {
+            snipe = potentialSnipe;
+          }
+        });
+
+        if (typeof(snipe) === "undefined") {
+          return;
+        }
       }
+
       if (msg.content.type === "flip" && msg.sender.username === this.botUsername) {
         snipe.monitorFlipResults(msg);
         return;
@@ -605,6 +618,7 @@ class Croupier {
         snipe.checkForPopularityContestVote(msg);
         snipe.checkReactionForPowerup(msg);
         snipe.checkForFreeEntry(msg);
+        snipe.checkForJoiningRoom(msg);
       }
       if (msg.content.type === "delete") {
         snipe.checkForPopularityContestVoteRemoval(msg);
