@@ -703,7 +703,7 @@ class Snipe {
 
   public processNewBet(txn: Transaction, msg: MessageSummary): Promise<boolean> {
     const channel: ChatChannel = msg.channel;
-    const onBehalfOfMatch: Array<any> = msg.content.text.body.match(/(for|4):?\s?@?(\w+@?(\w+)?)/i);
+    const onBehalfOfMatch: Array<any> = msg.content.text.body.match(/(for):?\s?@?(\w+@?(\w+)?)/i);
 
     const self: Snipe = this;
 
@@ -854,8 +854,7 @@ class Snipe {
     message += `Bet in multiples of 0.01XLM.  Betting format:`;
     message += `\`\`\`+0.01XLM@${self.croupier.botUsername}\`\`\``;
     message += `Minimum bet: 0.01XLM\n`;
-    message += `Make 3 uninterrupted bets of **${this.displayFixedNice(self.blinds)}XLM**`;
-    message += ` and receive a powerup!`;
+    message += `Make 3 uninterrupted bets and receive a powerup!`;
     message += `\n\n**Please ensure you have read the rules before making any bets**  `;
     message += `/keybase/team/codeforcash/CROUPIER-RULES.md`;
 
@@ -1310,8 +1309,8 @@ class Snipe {
       );
 
       // Encourage other people to join in
-      let positiveMessage: string = `${msg.sender.username} earned an extra point `;
-      positiveMessage += `in the betting table, thanks to positive energy!`;
+      let positiveMessage: string = `Thanks to positive energy, ${msg.sender.username}`;
+      positiveMessage += ` earned an extra point in the betting table!`;
 
       const freeBetsCount: number = self.countFreeBets();
 
