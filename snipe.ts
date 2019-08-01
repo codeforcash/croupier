@@ -769,7 +769,11 @@ class Snipe {
         }
       } else if (typeof self.positionSizes[txn.fromUsername] === "undefined") {
         self.chatSend(`You cannot bet on behalf of ${recipient} unless you are participating as well`);
-        resolve(false);
+        self.croupier.processRefund(txn, msg.channel).then(() => {
+            resolve(false);
+        }).catch((e) => {
+          console.log(e);
+        });
       } else {
         self.addSnipeParticipant(txn, recipient);
         self.chatSend(`@${recipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
