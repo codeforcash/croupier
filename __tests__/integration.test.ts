@@ -2,6 +2,7 @@ import * as os from "os";
 import Croupier from "../croupier";
 import * as Bot from "../keybase-bot";
 import { ChatChannel, MessageSummary, Transaction } from "../keybase-bot";
+import Snipe from "../snipe";
 
 import {
   IBetData,
@@ -36,13 +37,17 @@ describe("Betting Functionality", (): void => {
 
   process.env.DEVELOPMENT = undefined;
   process.env.TEST = "true";
-  const croupier: Croupier = new Croupier(botUsername,
-    process.env.TEST_CROUPIER_PAPERKEY1,
-    process.env.TEST_CROUPIER_PAPERKEY2,
-    process.env.MONGODB_USERNAME,
-    process.env.MONGODB_PASSWORD,
-    process.env.MONGODB_HOST,
-    true);
+
+  const croupier: Croupier = new Croupier({
+    botUsername,
+    paperKey1: process.env.TEST_CROUPIER_PAPERKEY1,
+    paperKey2: process.env.TEST_CROUPIER_PAPERKEY2,
+  }, {
+    mongoDbHost: process.env.MONGODB_HOST,
+    mongoDbIsCluster: true,
+    mongoDbPassword: process.env.MONGODB_PASSWORD,
+    mongoDbUsername: process.env.MONGODB_USERNAME,
+  });
 
   const channel: ChatChannel = {
     membersType: "team",

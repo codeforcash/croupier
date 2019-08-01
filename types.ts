@@ -1,5 +1,18 @@
 import { ChatChannel, MessageSummary, Transaction } from "./keybase-bot";
 
+export interface ICroupierBotConfig {
+  botUsername: string;
+  paperKey1: string;
+  paperKey2: string;
+}
+
+export interface ICroupierDbConfig {
+  mongoDbHost: string;
+  mongoDbIsCluster: boolean;
+  mongoDbPassword: string;
+  mongoDbUsername: string;
+}
+
 export interface IReactionContent {
   type: "reaction";
   reaction: {

@@ -16,3 +16,9 @@
 1. Use `docker ps` to find the container id
 2. `docker exec -ti CONTAINER_ID bash` to start a bash prompt within container
 3. `tail /home/keybase/node_log`
+
+### Analyzing the logs on local machine
+
+1. Use `docker ps` to find container id
+2. `docker cp CONTAINER_ID:/home/keybase/node_log .`
+3. scp it to your local machine or just check on the server

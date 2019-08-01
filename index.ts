@@ -12,15 +12,17 @@ async function main(): Promise<any> {
 
   process.env.DEVELOPMENT = "true";
 
-  croupier = new Croupier(
-    "devcroupier",
-    process.env.DEV_CROUPIER_PAPERKEY1,
-    process.env.DEV_CROUPIER_PAPERKEY2,
-    process.env.MONGODB_USERNAME,
-    process.env.MONGODB_PASSWORD,
-    process.env.MONGODB_HOST,
-    true,
-  );
+  croupier = new Croupier({
+    botUsername: "devcroupier",
+    paperKey1: process.env.DEV_CROUPIER_PAPERKEY1,
+    paperKey2: process.env.DEV_CROUPIER_PAPERKEY2,
+  }, {
+    mongoDbHost: process.env.MONGODB_HOST,
+    mongoDbIsCluster: true,
+    mongoDbPassword: process.env.MONGODB_PASSWORD,
+    mongoDbUsername: process.env.MONGODB_USERNAME,
+  });
+
   await croupier.run(true);
 }
 
