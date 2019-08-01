@@ -1316,7 +1316,7 @@ class Snipe {
       const freeBetsCount: number = self.countFreeBets();
 
       if (freeBetsCount === 1 || freeBetsCount % 10 === 0) {
-        positiveMessage += `Want in?  Click on one of the reactions below or just type in chat`;
+        positiveMessage += `\nWant in?  Click on one of the reactions below or just type in chat`;
       }
 
       self.chatSend(positiveMessage).then((posPlusPlusMsg) => {
