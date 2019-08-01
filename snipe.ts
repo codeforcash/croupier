@@ -1310,11 +1310,17 @@ class Snipe {
       );
 
       // Encourage other people to join in
-      let positiveMessage: string = `@${msg.sender.username} position++, thanks to positive energy!  `;
-      positiveMessage += `Want in?  Just react accordingly`;
+      let positiveMessage: string = `${msg.sender.username} earned an extra point `;
+      positiveMessage += `in the betting table, thanks to positive energy!`;
+
+      const freeBetsCount: number = self.countFreeBets();
+
+      if (freeBetsCount === 1 || freeBetsCount % 10 === 0) {
+        positiveMessage += `Want in?  Click on one of the reactions below or just type in chat`;
+      }
 
       self.chatSend(positiveMessage).then((posPlusPlusMsg) => {
-        const freeBetsCount: number = self.countFreeBets();
+
         if (freeBetsCount === 1 || freeBetsCount % 10 === 0) {
           freeEntryReactions.forEach((freeEntryReaction: string) => {
             self.bot1.chat.react(self.channel, posPlusPlusMsg.id, freeEntryReaction, undefined);
