@@ -49,7 +49,7 @@ class Snipe {
     this.runningClocks = {};
     this.flipMonitorIntervals = {};
     this.croupier = croupier;
-    this.croupier.channelSet.add(channel);
+    this.croupier.channelSet.add(JSON.stringify(channel));
     this.channel = channel;
     this.bot1 = bots.bot1;
     this.bot2 = bots.bot2;
@@ -214,8 +214,12 @@ class Snipe {
     ];
   }
 
-  // If the same person made 3 bets in a row, issue a powerup
-  // but not if they have recently been issued a powerup
+  // Issue a powerup if...
+  //   The same person made 3 paid bets in a row
+  //   OR the same person made 10 FREE bets in a row
+  //
+  // But DO NOT if they have recently been issued a powerup.
+
   public shouldIssuePowerup(): boolean {
     const count: number = this.participants.length;
 
@@ -229,27 +233,88 @@ class Snipe {
       this.participants[count - 2].username === this.participants[count - 3].username
     ) {
 
-      //  Get the index of the bet for which the most recent powerup was issued
-      let lastPowerupIndex: number = 0;
-      this.participants.forEach((participant, idx) => {
-        if (participant.powerup) {
-          lastPowerupIndex = idx;
+      // If any of the last 3 bets were freeBets, let's ensure that all 10 were free Bets and by the same person.
+      // If so, return true; if not, return false.
+      // Otherwise, proceed with normal paid bet logic.
+      if (this.participants[count - 1].transaction.freeBet || this.participants[count - 2].transaction.freeBet ||
+          this.participants[count - 3].transaction.freeBet) {
+
+        if (count >= 10) {
+
+          const issuee: string = this.participants[count - 1].username;
+
+          for (let i: number = 1; i <= 10; i++) {
+            if (this.participants[count - i].username !== issuee) {
+              return false;
+            }
+            if (!this.participants[count - i].transaction.freeBet) {
+              return false;
+            }
+          }
+
+          // Ok, the last 10 have all been free bets by username.
+          // But when was the most recent powerup issued?
+
+          let lastPowerupIndex: number = 0;
+          this.participants.forEach((participant, idx) => {
+            if (participant.powerup) {
+              lastPowerupIndex = idx;
+            }
+          });
+
+          // Have we never issued a powerup before? Then, issue.
+          if (lastPowerupIndex === 0) {
+            return true;
+          }
+
+          // Has it been at least 3 powerups since the most recent powerup was issued?
+          // This logic doesn't work if there has never been a powerup issued,
+          // hence the extra condition check ^
+          if (count - 1 - lastPowerupIndex >= 10) {
+            return true;
+          } else {
+            return false;
+          }
+
+        } else {
+          return false;
         }
-      });
 
-      // Have we never issued a powerup before? Then, issue.
-      if (lastPowerupIndex === 0) {
-        return true;
-      }
-
-      // Has it been at least 3 powerups since the most recent powerup was issued?
-      // This logic doesn't work if there has never been a powerup issued,
-      // hence the extra condition check ^
-      if (count - 1 - lastPowerupIndex >= 3) {
-        return true;
       } else {
-        return false;
+        //  This branch contains the logic for deciding whether to award
+        //  a powerup for a paid bet.
+
+        // If any of the 3 most recent were free bets, do not award powerup.
+        for (let i: number = 1; i <= 3; i++) {
+          if (this.participants[count - i].transaction.freeBet) {
+            return false;
+          }
+        }
+
+        //  Get the index of the bet for which the most recent powerup was issued
+        let lastPowerupIndex: number = 0;
+        this.participants.forEach((participant, idx) => {
+          if (participant.powerup) {
+            lastPowerupIndex = idx;
+          }
+        });
+
+        // Have we never issued a powerup before? Then, issue.
+        if (lastPowerupIndex === 0) {
+          return true;
+        }
+
+        // Has it been at least 3 powerups since the most recent powerup was issued?
+        // This logic doesn't work if there has never been a powerup issued,
+        // hence the extra condition check ^
+        if (count - 1 - lastPowerupIndex >= 3) {
+          return true;
+        } else {
+          return false;
+        }
+
       }
+
     } else {
       return false;
     }
@@ -791,7 +856,10 @@ class Snipe {
     let sum: number;
     sum = 0;
     this.participants.forEach((participant) => {
-      if (!participant.freeBet) {
+
+      console.log("participant", participant);
+
+      if (!participant.transaction.freeBet) {
         sum += parseFloat(participant.transaction.amount);
       }
     });

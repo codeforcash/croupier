@@ -20,6 +20,8 @@ class Croupier {
   public paperKey1: string;
   public paperKey2: string;
 
+  // Keeps track of all the channels that have had a Snipe running while the bot was running
+  // i.e., whom to notify when the bot goes for shutdown or restarts
   public channelSet: Set<ChatChannel>;
 
   // Probably should be abstracted into another class
@@ -67,16 +69,19 @@ class Croupier {
       try {
 
         console.log("?");
-        Object.keys(this.activeSnipes).forEach((ch: ChatChannel) => {
-          self.channelSet.add(JSON.parse(ch));
+        Object.keys(this.activeSnipes).forEach((stringifiedChannel: string) => {
+          self.channelSet.add(stringifiedChannel);
         });
         console.log("x");
         console.log("channelSet", self.channelSet);
-        self.channelSet.forEach((ch: ChatChannel) => {
+        self.channelSet.forEach((stringifiedChannel: ChatChannel) => {
 
+          const ch: ChatChannel = JSON.parse(stringifiedChannel);
           self.bot1.chat.send(ch, {
             body: "Croupier was just restarted",
           }, undefined);
+          console.log("Sent to channel", ch);
+
         });
 
       } catch (e3) {
@@ -94,8 +99,9 @@ class Croupier {
 
     const self: Croupier = this;
 
-    self.channelSet.forEach(async (channel: ChatChannel) => {
+    self.channelSet.forEach(async (stringifiedChannel: string) => {
 
+      const channel: ChatChannel = JSON.parse(stringifiedChannel);
       try {
 
         await self.bot1.chat.send(channel, {
@@ -657,7 +663,7 @@ class Croupier {
         Object.keys(snipes).forEach((chid) => {
           const snipeChannel: ChatChannel = JSON.parse(chid);
           const snipe: Snipe = snipes[chid];
-          snipes[chid].chatSend("Croupier was restarted... Previous bets are still valid!");
+          snipes[chid].chatSend("Previous bets are still valid!");
           snipes[chid].chatSend(snipe.buildBettingTable());
           snipe.launchSnipe();
         });

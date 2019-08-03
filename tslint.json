@@ -23,5 +23,8 @@
       }
     ]
   },
-  "rulesDirectory": []
+  "rulesDirectory": [],
+  "linterOptions": {
+    "exclude": ["scratchpad.ts", "node_modules/*"]
+  }
 }

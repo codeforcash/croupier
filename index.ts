@@ -1,6 +1,8 @@
+import * as dotenv from "dotenv";
+dotenv.config();
+
 import * as Honeybadger from "honeybadger";
 import Croupier from "./croupier";
-import * as Bot from "./keybase-bot";
 
 let croupier: Croupier;
 

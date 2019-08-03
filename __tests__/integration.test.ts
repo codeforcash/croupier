@@ -1,3 +1,4 @@
+import * as dotenv from "dotenv";
 import * as os from "os";
 import Croupier from "../croupier";
 import * as Bot from "../keybase-bot";
@@ -25,6 +26,7 @@ function timeout(time: number): Promise<void> {
 
 describe("Betting Functionality", (): void => {
 
+  dotenv.config();
   const botUsername: string = "testcroupier";
 
   const ringo: Bot = new Bot();
