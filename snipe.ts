@@ -471,8 +471,10 @@ class Snipe {
       const transactionFeePromises: Array<Promise<any>> = [];
 
       self.participants.forEach((participant) => {
-        bounty += parseFloat(participant.transaction.amount);
-        transactionFeePromises.push(self.croupier.calculateTransactionFees(participant.transaction));
+        if (!participant.transaction.freeBet) {
+          bounty += parseFloat(participant.transaction.amount);
+          transactionFeePromises.push(self.croupier.calculateTransactionFees(participant.transaction));
+        }
       });
 
       Promise.all(transactionFeePromises).then((values: Array<number>) => {
