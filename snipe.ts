@@ -39,12 +39,14 @@ class Snipe {
   public powerups: Array<IPowerupAward>;
   public flipMonitorIntervals: object;
   public croupierMessages: object;
+  public positiveEnergyMessageIds: Array<number>;
 
   public constructor(croupier: Croupier, channel: ChatChannel, bots: any, options: any) {
     // TODO: Bots and Options should really be interfaces, not an any
 
     const self: Snipe = this;
     this.emitter = new EventEmitter();
+    this.positiveEnergyMessageIds = [];
     this.croupierMessages = {};
     this.runningClocks = {};
     this.flipMonitorIntervals = {};
@@ -883,6 +885,13 @@ class Snipe {
         self.bettingTable = msg.id;
       });
     }
+    setTimeout(() => {
+
+      self.positiveEnergyMessageIds.forEach((msgId) => {
+        self.bot1.chat.delete(self.channel, msgId, {});
+      });
+
+    }, 1000 * 10);
   }
 
   public resetSnipeClock(): void {
@@ -1388,6 +1397,7 @@ class Snipe {
 
       self.chatSend(positiveMessage).then((posPlusPlusMsg) => {
 
+        self.positiveEnergyMessageIds.push(posPlusMsg.id);
         if (freeBetsCount === 1 || freeBetsCount % 10 === 0) {
           freeEntryReactions.forEach((freeEntryReaction: string) => {
             self.bot1.chat.react(self.channel, posPlusPlusMsg.id, freeEntryReaction, undefined);

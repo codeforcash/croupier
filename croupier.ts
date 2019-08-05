@@ -607,7 +607,6 @@ class Croupier {
       }
       if (msg.content.type === "text" && msg.content.text.body) {
         snipe.checkTextForPowerup(msg);
-        snipe.checkForFreeEntry(msg);
       }
 
       if (msg.content.type === "reaction") {
