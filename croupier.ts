@@ -573,8 +573,10 @@ class Croupier {
       let snipe: Snipe = this.activeSnipes[JSON.stringify(msg.channel)];
 
       if (msg.channel.membersType === "impteamnative") {
-        this.respondToDM(msg);
-        return;
+        if (msg.channel.name.match(/,/g).length === 2) {
+          this.respondToDM(msg);
+          return;
+        }
       }
 
       if (typeof snipe !== "undefined" && snipe.freeze && msg.sender.username !== snipe.freeze) {
