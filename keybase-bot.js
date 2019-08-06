@@ -675,7 +675,7 @@ class Chat extends ClientBase {
     });
   }
 
-  sendMoneyInChat(topic, team, amount, recipient, extraParams) {
+  sendMoneyInChat(topic, team, amount, recipient, extraParams, impTeamNative) {
     return new Promise((resolve) => {
       console.log('sendMoneyInChat: 1');
       const child = child_process.spawn(`${croupierDirectory}/scripts/sendmoney.sh`, [
@@ -684,6 +684,7 @@ class Chat extends ClientBase {
         amount,
         recipient,
         extraParams,
+        impTeamNative,
         this._workingDir,
         this.homeDir,
       ]);

@@ -104,7 +104,7 @@ describe("Betting Functionality", (): void => {
     it("starts a new snipe", async (): Promise<void> => {
       jest.setTimeout(60000);
       const exitCode: any = await ringo.chat.sendMoneyInChat(channel.topicName,
-        channel.name, "0.01", botUsername, "countdown:30");
+        channel.name, "0.01", botUsername, "countdown:30", false);
       console.log("exitCode", exitCode);
       await timeout(10000);
       const readResponse: any = await paul.chat.read(channel);
@@ -131,7 +131,8 @@ describe("Betting Functionality", (): void => {
       // jest.useFakeTimers()
       jest.setTimeout(300000);
       expect.assertions(1);
-      const exitCode: any = await john.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername);
+      const exitCode: any = await john.chat.sendMoneyInChat(channel.topicName, channel.name,
+                                                            "0.01", botUsername, "", false);
 
       const snipe: Snipe = Object.values(croupier.activeSnipes)[0];
 
@@ -177,9 +178,10 @@ describe("Betting Functionality", (): void => {
       const duplicateRegistrationJohn: Bot = new Bot();
       await duplicateRegistrationJohn.init(process.env.CROUPIER_JOHN_USERNAME, process.env.CROUPIER_JOHN_PAPERKEY);
 
-      await ringo.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername, "countdown:30");
+      await ringo.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername, "countdown:30", false);
       await timeout(10000);
-      const exitCode: any = await john.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01", botUsername);
+      const exitCode: any = await john.chat.sendMoneyInChat(channel.topicName, channel.name, "0.01",
+                                                            botUsername, "", false);
       const snipe: Snipe = Object.values(croupier.activeSnipes)[0];
 
       let winnerPaid: boolean = false;

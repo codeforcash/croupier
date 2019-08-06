@@ -39,14 +39,14 @@ class Snipe {
   public powerups: Array<IPowerupAward>;
   public flipMonitorIntervals: object;
   public croupierMessages: object;
-  public positiveEnergyMessageIds: Array<number>;
+  public positiveEnergyMessageIds: Set<number>;
 
   public constructor(croupier: Croupier, channel: ChatChannel, bots: any, options: any) {
     // TODO: Bots and Options should really be interfaces, not an any
 
     const self: Snipe = this;
     this.emitter = new EventEmitter();
-    this.positiveEnergyMessageIds = [];
+    this.positiveEnergyMessageIds = new Set();
     this.croupierMessages = {};
     this.runningClocks = {};
     this.flipMonitorIntervals = {};
@@ -106,7 +106,15 @@ class Snipe {
       return new Promise((resolveMoneyThrottle) => {
         moneyThrottle(() => {
           try {
-            self.bot1.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(), recipient, extraParams);
+
+            if (self.channel.membersType === "impteamnative") {
+              self.bot1.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(),
+                                           recipient, extraParams, true);
+            } else {
+              self.bot1.chat.sendMoneyInChat(channel.topicName, channel.name, amount.toString(),
+                                           recipient, extraParams, false);
+            }
+
             resolveMoneyThrottle();
           } catch (e) {
             self.bot1.chat.send(
@@ -493,17 +501,8 @@ class Snipe {
     return new Promise((resolve) => {
       //  If winnerUsername is a participant in this chat, moneySend
       //  Otherwise, use stellar.expert.xlm method
-      self.bot1.team
-        .listTeamMemberships({
-          team: channel.name,
-        })
-        .then((res) => {
-          let allMembers: Array<string> = [];
-          allMembers = allMembers.concat(res.members.owners.map((u) => u.username));
-          allMembers = allMembers.concat(res.members.admins.map((u) => u.username));
-          allMembers = allMembers.concat(res.members.writers.map((u) => u.username));
-          allMembers = allMembers.concat(res.members.readers.map((u) => u.username));
 
+       self.getChannelMembers(channel).then((allMembers) => {
           // it's possible the winner is not in the chat, that they won through a onBehalfOf contribution of someone else
           if (allMembers.indexOf(winnerUsername) === -1) {
             try {
@@ -891,9 +890,10 @@ class Snipe {
 
       self.positiveEnergyMessageIds.forEach((msgId) => {
         self.bot1.chat.delete(self.channel, msgId, {});
+        self.positiveEnergyMessageIds.delete(msgId);
       });
 
-    }, 1000 * 10);
+    }, 1000 * 15);
   }
 
   public resetSnipeClock(): void {
@@ -1399,7 +1399,7 @@ class Snipe {
 
       self.chatSend(positiveMessage).then((posPlusPlusMsg) => {
 
-        self.positiveEnergyMessageIds.push(posPlusMsg.id);
+        self.positiveEnergyMessageIds.add(posPlusPlusMsg.id);
         if (freeBetsCount === 1 || freeBetsCount % 10 === 0) {
           freeEntryReactions.forEach((freeEntryReaction: string) => {
             self.bot1.chat.react(self.channel, posPlusPlusMsg.id, freeEntryReaction, undefined);
@@ -1599,6 +1599,34 @@ class Snipe {
     });
   }
 
+  private getChannelMembers(channel: ChatChannel): Promise<any> {
+
+    const self: Snipe = this;
+
+    return new Promise(async (resolve) => {
+
+      if (channel.membersType === "impteamnative") {
+        resolve(channel.name.split(","));
+      } else {
+        let allMembers: Array<string> = [];
+        self.bot1.team
+        .listTeamMemberships({
+          team: channel.name,
+        })
+        .then((res) => {
+          allMembers = allMembers.concat(res.members.owners.map((u) => u.username));
+          allMembers = allMembers.concat(res.members.admins.map((u) => u.username));
+          allMembers = allMembers.concat(res.members.writers.map((u) => u.username));
+          allMembers = allMembers.concat(res.members.readers.map((u) => u.username));
+          resolve(allMembers);
+        });
+
+      }
+
+    });
+
+  }
+
   private processNewBetForChannel(txn: Transaction, msg: MessageSummary, resolve: any): void {
 
     const channel: ChatChannel = msg.channel;
@@ -1613,10 +1641,7 @@ class Snipe {
       return;
     }
 
-    self.bot1.team
-    .listTeamMemberships({
-      team: channel.name,
-    })
+    self.getChannelMembers(channel)
     .then((res) => {
       let allMembers: Array<string> = [];
       allMembers = allMembers.concat(res.members.owners.map((u) => u.username));

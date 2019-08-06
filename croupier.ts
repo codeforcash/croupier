@@ -92,7 +92,9 @@ class Croupier {
     }
 
     return this.bot1.chat.watchAllChannelsForNewMessages(
-      this.routeIncomingMessage.bind(this), (e) => console.error(e), undefined);
+      this.routeIncomingMessage.bind(this), (e) => console.error(e), {
+        hideExploding: true,
+      });
   }
 
   public async shutdown(): Promise<any> {
@@ -570,6 +572,9 @@ class Croupier {
   private routeIncomingMessage(msg: MessageSummary): void {
     const self: Croupier = this;
     try {
+
+      console.log(msg);
+
       let snipe: Snipe = this.activeSnipes[JSON.stringify(msg.channel)];
 
       if (msg.channel.membersType === "impteamnative") {
