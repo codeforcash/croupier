@@ -1052,6 +1052,13 @@ class Snipe {
             if (flipDetails.phase === 2) {
               console.log("results are in");
               clearInterval(self.flipMonitorIntervals[msg.conversationId]);
+
+              if (JSON.stringify(self.channel) !== JSON.stringify(msg.channel)) {
+                let copyResults: string = `The winning number in @${msg.channel.name} `;
+                copyResults += `was **${flipDetails.resultInfo.number}**`;
+                self.chatSend(copyResults);
+              }
+
               self.resolveFlip(flipDetails.resultInfo.number).then((winner) => {
                 self.clearSnipe(winner);
               });
@@ -1114,6 +1121,7 @@ class Snipe {
                     console.log("results are in");
                     console.log(result.status.resultInfo.number);
                     clearInterval(self.flipMonitorIntervals[msg.conversationId]);
+
                     self.resolveFlip(result.status.resultInfo.number).then((winner) => {
                       console.log("winner", winner);
 
