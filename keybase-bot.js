@@ -675,6 +675,31 @@ class Chat extends ClientBase {
     });
   }
 
+
+  listHere(topic, team) {
+
+    return new Promise((resolve) => {
+
+      keybaseExec(this._workingDir, this.homeDir,
+                ['chat', 'list-members', team, topic], undefined).then((output) => {
+
+        let hereList = output.split("\n");
+
+        // Output contains some lines to ignore.
+        hereList.pop();
+        hereList.shift();
+        hereList.shift();
+
+        resolve(hereList);
+
+      });
+
+    });
+
+  }
+
+
+
   sendMoneyInChat(topic, team, amount, recipient, extraParams, impTeamNative) {
     return new Promise((resolve) => {
       console.log('sendMoneyInChat: 1');

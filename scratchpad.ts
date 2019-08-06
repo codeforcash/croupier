@@ -16,10 +16,15 @@ const bot: Bot = new Bot(os.homedir());
 const botUsername: string = "zackburt2";
 const paperkey: string = process.env.ZACKBURT2_PAPERKEY;
 
-async function main(): void {
+async function main(): Promise<any> {
 
   await bot.init(botUsername, paperkey);
   console.log("initialized.");
+
+  await bot.chat.listHere('cryptosnipe', 'mkbot').then((data) => {
+    console.log('...data!');
+    console.log(data.map((x) => x.toString()));
+  });
 }
 
 main();

@@ -794,9 +794,8 @@ class Snipe {
     const self: Snipe = this;
     const currentPotSize: number = this.calculatePotSize();
 
-    // DISABLED until we can figure out how to find all the subscribers to a channel
     if (recipient === "here") {
-      // self.processNewBetForChannel(txn, msg, resolve);
+      self.processNewBetForChannel(txn, msg, resolve);
       return;
     }
 
@@ -1641,13 +1640,8 @@ class Snipe {
       return;
     }
 
-    self.getChannelMembers(channel)
-    .then((res) => {
-      let allMembers: Array<string> = [];
-      allMembers = allMembers.concat(res.members.owners.map((u) => u.username));
-      allMembers = allMembers.concat(res.members.admins.map((u) => u.username));
-      allMembers = allMembers.concat(res.members.writers.map((u) => u.username));
-      allMembers = allMembers.concat(res.members.readers.map((u) => u.username));
+    self.bot1.chat.listHere(self.channel.topicName, self.channel.name)
+    .then((allMembers) => {
 
       self.addSnipeParticipants(txn, allMembers).then((res2) => {
 
