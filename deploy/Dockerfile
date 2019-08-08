@@ -12,8 +12,7 @@ RUN pacman -Sy && \
     expect \
     nodejs-lts-dubnium \
     npm \
-    sudo \
-    keybase
+    sudo
 
 RUN useradd -m keybase && \
     mkdir /keybase && \
@@ -23,5 +22,9 @@ RUN echo 'keybase ALL=(ALL) NOPASSWD: ALL' | EDITOR='tee -a' visudo
 
 USER keybase
 WORKDIR /home/keybase
+
+RUN git clone https://aur.archlinux.org/keybase-bin.git && \
+        cd keybase-bin && \
+        makepkg -si --noconfirm
 
 ENV PATH=/home/keybase:$PATH

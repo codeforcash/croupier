@@ -10,7 +10,7 @@ Note: Due to technical limitations, we cannot read exploding messages from a pap
 
 ### Snipe class
 
-This class handles game logic.  If you want to modify game behavior, check out this class.
+This class handles game logic. If you want to modify game behavior, check out this class.
 
 There are many active `NodeJS.Timer` timers within the Snipe, that handle things like polling for the `/flip` results and counting down the game timer.
 
