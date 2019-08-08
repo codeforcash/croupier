@@ -48,8 +48,9 @@ class Croupier {
   public async init(): Promise<any> {
     this.activeSnipes = {};
     await this.bot1.init(this.botUsername, this.paperKey1, null);
-    await this.bot2.init(this.botUsername, this.paperKey2, null);
-    console.log("both paper keys initialized");
+    // Second bot is to read exploding messages
+    await this.bot2.initFromRunningService();
+    console.log("both bots initialized");
     await this.connectToDatabase();
     console.log("connected to database");
 
@@ -91,9 +92,9 @@ class Croupier {
       console.log("active snipes loaded");
     }
 
-    return this.bot1.chat.watchAllChannelsForNewMessages(
+    return this.bot2.chat.watchAllChannelsForNewMessages(
       this.routeIncomingMessage.bind(this), (e) => console.error(e), {
-        hideExploding: true,
+        hideExploding: false,
       });
   }
 

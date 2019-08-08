@@ -379,7 +379,7 @@ class Snipe {
       *${award.description}*
       Click the emoji to consume the powerup.`,
     ).then((msg) => {
-      this.bot1.chat.react(this.channel, msg.id, award.reaction, undefined);
+      this.bot2.chat.react(this.channel, msg.id, award.reaction, undefined);
       this.participants[participantIndex].powerup.reactionId = msg.id;
     });
   }
@@ -705,7 +705,7 @@ class Snipe {
 
         self.chatSend(`Anyone is free to join the subteam @${self.subteamName()} ...
         Reflip is in 30 seconds.`).then((sentChat) => {
-          self.bot1.chat.react(self.channel, sentChat.id, "Invite Me", undefined);
+          self.bot2.chat.react(self.channel, sentChat.id, "Invite Me", undefined);
         });
 
         setTimeout(() => {
@@ -742,21 +742,21 @@ class Snipe {
     const minBet: number = flatBettingValues.reduce((a, b) => Math.min(a, b));
     const maxBet: number = flatBettingValues.reduce((a, b) => Math.max(a, b));
 
-    this.bot2.chat.send(
+    this.bot1.chat.send(
       whereToFlip,
       {
         body: "**Final betting table...**",
       },
       undefined,
     );
-    this.bot2.chat.send(
+    this.bot1.chat.send(
       whereToFlip,
       {
         body: self.buildBettingTable(),
       },
       undefined,
     );
-    this.bot2.chat
+    this.bot1.chat
       .send(
         whereToFlip,
         {
@@ -783,7 +783,7 @@ class Snipe {
         self.processNewBetOnBehalfOf(txn, msg, onBehalfOfRecipient, resolve);
       } else {
         self.addSnipeParticipant(txn, undefined);
-        self.bot1.chat.react(channel, msg.id, ":heavy_check_mark:", undefined);
+        self.bot2.chat.react(channel, msg.id, ":heavy_check_mark:", undefined);
         resolve(true);
       }
     });
@@ -831,7 +831,7 @@ class Snipe {
         } else {
           self.addSnipeParticipant(txn, recipient);
           self.chatSend(`@${recipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
-          self.bot1.chat.react(channel, msg.id, ":gift:", undefined);
+          self.bot2.chat.react(channel, msg.id, ":gift:", undefined);
           resolve(true);
         }
       } else if (typeof self.positionSizes[txn.fromUsername] === "undefined") {
@@ -844,7 +844,7 @@ class Snipe {
       } else {
         self.addSnipeParticipant(txn, recipient);
         self.chatSend(`@${recipient} is locked into the snipe, thanks to @${txn.fromUsername}!`);
-        self.bot1.chat.react(channel, msg.id, ":gift:", undefined);
+        self.bot2.chat.react(channel, msg.id, ":gift:", undefined);
         resolve(true);
       }
     }).catch((e) => {
@@ -1409,7 +1409,7 @@ class Snipe {
         self.positiveEnergyMessageIds.add(posPlusPlusMsg.id);
         if (freeBetsCount === 1 || freeBetsCount % 10 === 0) {
           freeEntryReactions.forEach((freeEntryReaction: string) => {
-            self.bot1.chat.react(self.channel, posPlusPlusMsg.id, freeEntryReaction, undefined);
+            self.bot2.chat.react(self.channel, posPlusPlusMsg.id, freeEntryReaction, undefined);
           });
         }
       });
@@ -1531,8 +1531,8 @@ class Snipe {
         sassyMessage += `First to 3 votes wins `;
         sassyMessage += `(4 votes including the initial reaction seeded by me the Croupier)!`;
         self.chatSend(sassyMessage).then((msgData) => {
-          const challengerReaction: Promise<any> = self.bot1.chat.react(self.channel, msgData.id, `${consumer}`);
-          const leaderReaction: Promise<any> = self.bot1.chat.react(self.channel, msgData.id, `${leader}`);
+          const challengerReaction: Promise<any> = self.bot2.chat.react(self.channel, msgData.id, `${consumer}`);
+          const leaderReaction: Promise<any> = self.bot2.chat.react(self.channel, msgData.id, `${leader}`);
           Promise.all([challengerReaction, leaderReaction]).then((values) => {
             self.popularityContests.push({
               challenger: consumer,
@@ -1639,7 +1639,7 @@ class Snipe {
     const channel: ChatChannel = msg.channel;
     const self: Snipe = this;
 
-    self.bot1.chat.react(channel, msg.id, ":gift:", undefined);
+    self.bot2.chat.react(channel, msg.id, ":gift:", undefined);
 
     if (txn.amount < 2.01) {
       self.chatSend("Please send >=2.01XLM for an @here snipe - just adding you instead");
