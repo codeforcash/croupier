@@ -50,6 +50,7 @@ Note: run `killall keybase` and `keybase ctl stop` before running test suite
 
 ### All releases should more or less be stable.
 
-- [Release v1](https://blog.codefor.cash/2019/07/01/finding-alice-and-bob-in-wonderland-a-writeup-of-croupier-the-keybase-bot/)
+- [Release v0.1](https://blog.codefor.cash/2019/07/01/finding-alice-and-bob-in-wonderland-a-writeup-of-croupier-the-keybase-bot/)
+- [Release v0.2](https://blog.codefor.cash/2019/08/09/announcing-v0-2-of-croupier-the-keybase-sweepstakes-bot/)
 
 The next release is a work in progress and is expected some time in August. Join [@codeforcash](https://keybase.io/team/codeforcash) or [@mkbot#test3](https://keybase.io/team/mkbot#test3) on Keybase if you'd like to follow along.
