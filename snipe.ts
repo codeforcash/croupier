@@ -1207,6 +1207,7 @@ class Snipe {
         }
 
         if (self.clock === null || typeof self.clock === "undefined") {
+          self.clock = true;
           self
             .chatSend(display)
             .then((sentMessage) => {
