@@ -1312,12 +1312,18 @@ class Snipe {
     }
   }
 
-  public countFreeBets(): number {
+  public countFreeBets(username: string = ""): number {
     const self: Snipe = this;
     let freeBets: number = 0;
     self.participants.forEach((participant) => {
       if (participant.transaction.freeBet) {
-        freeBets++;
+        if (username === "") {
+          freeBets++;
+        } else {
+          if (participant.transaction.fromUsername === username) {
+            freeBets++;
+          }
+        }
       }
     });
     return freeBets;
@@ -1407,9 +1413,9 @@ class Snipe {
       let positiveMessage: string = `Thanks to positive energy, ${msg.sender.username}`;
       positiveMessage += ` earned an extra point in the betting table!`;
 
-      const freeBetsCount: number = self.countFreeBets();
+      const freeBetsCount: number = self.countFreeBets(msg.sender.username);
 
-      if (freeBetsCount === 1 || freeBetsCount % 10 === 0) {
+      if (freeBetsCount === 1) {
         self.chatSend(positiveMessage);
       }
 
