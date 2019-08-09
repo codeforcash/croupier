@@ -34,14 +34,16 @@ async function main(): Promise<any> {
   setTimeout(() => {
 
     console.log("Timeout called...");
+    croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01",
+                                             "@here", undefined, false);
     giveaway = setInterval(() => {
 
       console.log("Interval called");
       croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01",
                                              "@here", undefined, false);
 
-    }, 1000 * 60 * 60);
-  }, 1000 * 15);
+    }, 1000 * 60 * 60 * 2.5);
+  }, 1000 * 10);
   await croupier.run(true);
 
 }
