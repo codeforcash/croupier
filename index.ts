@@ -34,13 +34,29 @@ async function main(): Promise<any> {
   setTimeout(() => {
 
     console.log("Timeout called...");
-    croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01",
-                                             "@here", undefined, false);
+
+    const channel: ChatChannel = {
+      membersType: "team",
+      name: "mkbot",
+      public: false,
+      topicName: "cryptosnipe",
+      topicType: "chat",
+
+    };
+
+    if (!croupier.activeSnipes[JSON.stringify(channel)]) {
+      croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01",
+                                             "here", "", false);
+    }
+
     giveaway = setInterval(() => {
 
       console.log("Interval called");
-      croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01",
-                                             "@here", undefined, false);
+
+      if (!croupier.activeSnipes[JSON.stringify(channel)]) {
+        croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01",
+                                                     "here", "", false);
+      }
 
     }, 1000 * 60 * 60 * 2.5);
   }, 1000 * 10);
