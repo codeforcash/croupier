@@ -891,21 +891,6 @@ class Snipe {
     return Math.ceil(Math.abs(moment.duration(this.bettingStops.diff(moment())).asSeconds()));
   }
 
-  public redrawBettingTable(): void {
-    const self: Snipe = this;
-    if (this.bettingTable) {
-      this.bot1.chat.delete(this.channel, this.bettingTable, {}).then(() => {
-        self.chatSend(self.buildBettingTable()).then((msg) => {
-          self.bettingTable = msg.id;
-        });
-      });
-    } else {
-      this.chatSend(this.buildBettingTable()).then((msg) => {
-        self.bettingTable = msg.id;
-      });
-    }
-  }
-
   public resetSnipeClock(): void {
     const timeRemaining: number = Math.ceil(this.getTimeLeft());
     console.log("time remaining", timeRemaining);
@@ -927,7 +912,6 @@ class Snipe {
 
     this.bettingStops = moment().add(timerEndsInSeconds, "seconds");
 
-    this.bot1.chat.delete(this.channel, this.clock, {});
     const self: Snipe = this;
     const finalizeBetsTimeout: NodeJS.Timeout = setTimeout(() => {
       self.finalizeBets();
