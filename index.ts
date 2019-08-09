@@ -28,12 +28,15 @@ async function main(): Promise<any> {
   croupier.copyRulesToKeybase().catch((e) => {
     console.log("Could not copy latest RULES.md to Keybase because ", e);
   });
+
+  setTimeout(() => {
+    setInterval(() => {
+      croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01".toString(),
+                                             "@here", undefined, false);
+    }, 1000 * 60 * 60);
+  }, 1000 * 15);
   await croupier.run(true);
 
-  setInterval(() => {
-    croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01".toString(),
-                                           "@here", undefined, false);
-  }, 1000 * 60 * 60);
 }
 
 async function shutDown(): Promise<any> {

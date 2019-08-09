@@ -1210,12 +1210,13 @@ class Snipe {
         display += self.buildBettingTable();
         display += `\n${timeMessage}`;
 
+        console.log(self.scrollCount);
         if (self.scrollCount % 10 === 0) {
 
           try {
             self.bot1.chat.delete(self.channel, self.clock);
           } catch (e) {
-            // ok
+            console.log("Ran into problems", e);
           }
           self.clock = null;
 
