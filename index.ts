@@ -45,7 +45,7 @@ async function main(): Promise<any> {
 
     if (!croupier.activeSnipes[JSON.stringify(channel)]) {
       croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01",
-                                             croupier.botUsername, "for @here", false);
+                                             croupier.botUsername, "for @here countdown:3600", false);
     }
 
     giveaway = setInterval(() => {
@@ -54,7 +54,7 @@ async function main(): Promise<any> {
 
       if (!croupier.activeSnipes[JSON.stringify(channel)]) {
         croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01",
-                                                     croupier.botUsername, "for @here", false);
+                                                     croupier.botUsername, "for @here countdown:3600", false);
       }
 
     }, 1000 * 60 * 60 * 2.5);
