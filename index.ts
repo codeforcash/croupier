@@ -29,9 +29,15 @@ async function main(): Promise<any> {
     console.log("Could not copy latest RULES.md to Keybase because ", e);
   });
 
+  let giveaway: any;
+
   setTimeout(() => {
-    setInterval(() => {
-      croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01".toString(),
+
+    console.log("Timeout called...");
+    giveaway = setInterval(() => {
+
+      console.log("Interval called");
+      croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01",
                                              "@here", undefined, false);
 
     }, 1000 * 60 * 60);
