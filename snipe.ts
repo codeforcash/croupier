@@ -1140,6 +1140,7 @@ class Snipe {
   }
 
   public adjustBlinds(): void {
+    const self: Snipe = this;
     const now: number = +new Date();
     const secondsElapsed: number = Math.floor((now - this.bettingStarted) / 1000);
     const minutesElapsed: number = Math.floor(secondsElapsed / 60.0);
@@ -1148,8 +1149,12 @@ class Snipe {
       blinds = 0.01;
     } else {
       blinds = 0.01 * Math.pow(2, Math.floor((minutesElapsed - 10) / 5));
+
+      blinds = Math.min(blinds, this.calculatePotSize() / 10.0 );
+
       // c.f. https://stackoverflow.com/questions/11832914/round-to-at-most-2-decimal-places-only-if-necessary
       blinds = Math.round((blinds + 0.00001) * 100) / 100; // scale to 2 dp
+
     }
     if (blinds !== this.blinds) {
       this.blinds = blinds;

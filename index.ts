@@ -52,9 +52,17 @@ async function main(): Promise<any> {
 
       console.log("Interval called");
 
-      if (!croupier.activeSnipes[JSON.stringify(channel)]) {
+      let active: boolean = false;
+      Object.keys(croupier.activeSnipes).forEach((stringifiedChannel: string) => {
+        const ch: ChatChannel = JSON.parse(stringifiedChannel);
+        if (ch.name === "mkbot" && ch.topicName === "cryptosnipe") {
+          active = true;
+        }
+      });
+
+      if (!active) {
         croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01",
-                                                     croupier.botUsername, "for @here countdown:3600", false);
+                                     croupier.botUsername, "for @here countdown:3600", false);
       }
 
     }, 1000 * 60 * 60 * 2.5);
