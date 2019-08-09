@@ -33,6 +33,7 @@ async function main(): Promise<any> {
     setInterval(() => {
       croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01".toString(),
                                              "@here", undefined, false);
+
     }, 1000 * 60 * 60);
   }, 1000 * 15);
   await croupier.run(true);

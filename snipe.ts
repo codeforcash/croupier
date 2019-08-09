@@ -1211,7 +1211,7 @@ class Snipe {
         display += `\n${timeMessage}`;
 
         console.log(self.scrollCount);
-        if (self.scrollCount % 10 === 0) {
+        if (self.scrollCount >= 10) {
 
           try {
             self.bot1.chat.delete(self.channel, self.clock);
@@ -1219,7 +1219,7 @@ class Snipe {
             console.log("Ran into problems", e);
           }
           self.clock = null;
-
+          self.scrollCount = 0;
         }
 
         if (self.clock === null || typeof self.clock === "undefined") {
