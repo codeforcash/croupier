@@ -1,6 +1,5 @@
 # Getting the bot deployed to production
 
-
 1. `apt-get install docker-compose`
 2. `usermod -aG docker`
 3. Log out and log back into shell
@@ -11,7 +10,6 @@
 8. Copy the scripts in the root directory to 0_scripts/ on the production box
 9. `docker build --no-cache -t keybase_croupier .`
 10. `docker-compose up -d croupier`
-
 
 NOTE:
 

@@ -45,7 +45,7 @@ For the first ten minutes of the game, any Lumen bets must be at least 0.01XLM â
 
 By reacting, within Keybase, to one of Croupierâ€™s messages regarding an individual round, with one of the following reactions, Croupier will grant a complimentary entry, of position size 1:
 
-[`:smile:`, `:smiley:`, `:raising_hand:`, `:man-raising-hand:`, `:woman-raising-hand:`, `:thumbsup:`, `:clap:`, `:man-tipping-hand:`, `:woman-tipping-hand:`, `:sparkles:`, `:zany_face:`, `:+1:`]
+[`:smile:`, `:smiley:`, `:raising_hand:`, `:man-raising-hand:`, `:woman-raising-hand:`, `:thumbsup:`, `:clap:`, `:man-tipping-hand:`, `:woman-tipping-hand:`, `:sparkles:`, `:zany_face:`, `:+1:`, `:boom:`, `:fire:`, `:tada:`, `:joy:`]
 
 ### How someone wins
 

@@ -1,4 +1,5 @@
 import axios, { AxiosPromise, AxiosRequestConfig } from "axios";
+import * as fs from "fs";
 import * as _ from "lodash";
 import * as moment from "moment";
 import * as mongodb from "mongodb";
@@ -96,6 +97,25 @@ class Croupier {
       this.routeIncomingMessage.bind(this), (e) => console.error(e), {
         hideExploding: false,
       });
+  }
+
+  public pathToRules(): string {
+    return `/keybase/public/${this.botUsername}/RULES.md`;
+  }
+
+  public copyRulesToKeybase(): Promise<any> {
+
+    const destination: string = this.pathToRules();
+    return new Promise((resolve) => {
+
+      fs.copyFile("RULES.md", destination, (err) => {
+        if (err) {
+          console.log(err);
+          return;
+        }
+        resolve();
+      });
+    });
   }
 
   public async shutdown(): Promise<any> {
@@ -510,7 +530,7 @@ class Croupier {
       }
 
       if (txn.amount < snipe.blinds) {
-        snipe.chatSend(`Bet was below blinds - refunding`);
+        snipe.chatSend(`Bet was below blinds (${snipe.blinds}) - refunding`);
         this.processRefund(txn, channel);
         return;
       }
@@ -563,7 +583,7 @@ class Croupier {
 
     Have some feedback?  Message @zackburt here on Keybase.
     Filing a bug report or feature request?  Post on GitHub: https://github.com/codeforcash/croupier/issues/
-    Want to read the rules or start a game?  /keybase/team/codeforcash/CROUPIER-RULES.md`;
+    Want to read the rules or start a game?  /keybase/public/${this.botUsername}/RULES.md`;
 
     this.bot1.chat.send(channel, {
       body: helpMsg,
@@ -585,7 +605,9 @@ class Croupier {
         }
       }
 
-      if (typeof snipe !== "undefined" && snipe.freeze && msg.sender.username !== snipe.freeze) {
+      if (typeof snipe !== "undefined" && snipe.freeze
+          && msg.sender.username !== snipe.freeze
+          && msg.sender.username !== self.botUsername) {
         snipe.freezeBet(msg);
         return;
       }
@@ -615,6 +637,7 @@ class Croupier {
       }
       if (msg.content.type === "text" && msg.content.text.body) {
         snipe.checkTextForPowerup(msg);
+        snipe.scrollCount++;
       }
 
       if (msg.content.type === "reaction") {

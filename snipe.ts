@@ -39,14 +39,33 @@ class Snipe {
   public powerups: Array<IPowerupAward>;
   public flipMonitorIntervals: object;
   public croupierMessages: object;
-  public positiveEnergyMessageIds: Set<number>;
+  public freeEntryReactions: Array<string>;
+  public scrollCount: number;
 
   public constructor(croupier: Croupier, channel: ChatChannel, bots: any, options: any) {
     // TODO: Bots and Options should really be interfaces, not an any
 
     const self: Snipe = this;
+    this.scrollCount = 0;
+    this.freeEntryReactions = [
+      ":smile:",
+      ":smiley:",
+      ":raising_hand:",
+      ":man-raising-hand:",
+      ":woman-raising-hand:",
+      ":thumbsup:",
+      ":clap:",
+      ":man-tipping-hand:",
+      ":woman-tipping-hand:",
+      ":sparkles:",
+      ":zany_face:",
+      ":+1:",
+      ":boom:",
+      ":fire:",
+      ":tada:",
+      ":joy:",
+    ];
     this.emitter = new EventEmitter();
-    this.positiveEnergyMessageIds = new Set();
     this.croupierMessages = {};
     this.runningClocks = {};
     this.flipMonitorIntervals = {};
@@ -885,18 +904,9 @@ class Snipe {
         self.bettingTable = msg.id;
       });
     }
-    setTimeout(() => {
-
-      self.positiveEnergyMessageIds.forEach((msgId) => {
-        self.bot1.chat.delete(self.channel, msgId, {});
-        self.positiveEnergyMessageIds.delete(msgId);
-      });
-
-    }, 1000 * 15);
   }
 
   public resetSnipeClock(): void {
-    this.redrawBettingTable();
     const timeRemaining: number = Math.ceil(this.getTimeLeft());
     console.log("time remaining", timeRemaining);
     clearTimeout(this.timeout);
@@ -934,7 +944,7 @@ class Snipe {
     message += `Minimum bet: 0.01XLM\n`;
     message += `Make 3 uninterrupted bets and receive a powerup!`;
     message += `\n\n**Please ensure you have read the rules before making any bets**  `;
-    message += `/keybase/team/codeforcash/CROUPIER-RULES.md`;
+    message += `/keybase/public/${this.croupier.botUsername}/RULES.md`;
 
     self.chatSend(message);
 
@@ -1184,10 +1194,36 @@ class Snipe {
         if (seconds < 55) {
           stopsWhen = `in ${seconds} seconds`;
         }
-        console.log(`attempting to edit message ${self.clock} in channel ${self.channel}`);
+
+        const reminderMessage: string = `Reminder: rules are here, ${self.croupier.pathToRules()}`;
+        const timeMessage: string = hourglass + ` betting stops ${stopsWhen}`;
+        let freeBetReminder: string = `Reminder: bet for free by reacting to my messages with `;
+        freeBetReminder += `any of these emojis: `;
+        this.freeEntryReactions.forEach((reaction) => {
+          freeBetReminder += reaction;
+          freeBetReminder += " ";
+        });
+        let howToBetReminder: string = `Reminder: bet by typing \``;
+        howToBetReminder += `+0.1XLM@${self.croupier.botUsername}\``;
+
+        let display: string = `${reminderMessage}\n${howToBetReminder}\n${freeBetReminder}\n`;
+        display += self.buildBettingTable();
+        display += `\n${timeMessage}`;
+
+        if (self.scrollCount % 10 === 0) {
+
+          try {
+            self.bot1.chat.delete(self.channel, self.clock);
+          } catch (e) {
+            // ok
+          }
+          self.clock = null;
+
+        }
+
         if (self.clock === null || typeof self.clock === "undefined") {
           self
-            .chatSend(hourglass + ` betting stops ${stopsWhen}`)
+            .chatSend(display)
             .then((sentMessage) => {
               self.clock = sentMessage.id;
             })
@@ -1195,10 +1231,11 @@ class Snipe {
               console.log(e);
             });
         } else {
-          self.bot1.chat
+
+            self.bot1.chat
             .edit(self.channel, self.clock, {
               message: {
-                body: hourglass + ` betting stops ${stopsWhen}`,
+                body: display,
               },
             })
             .then((res) => {
@@ -1207,8 +1244,10 @@ class Snipe {
             .catch((e) => {
               self.clock = null;
               console.log(e);
-            });
+          });
+
         }
+
       }
     } catch (e) {
       console.log("ran into error in runClock fxn, ", e);
@@ -1333,28 +1372,13 @@ class Snipe {
 
     console.log("Checking for free entry");
 
-    const freeEntryReactions: Array<string> = [
-      ":smile:",
-      ":smiley:",
-      ":raising_hand:",
-      ":man-raising-hand:",
-      ":woman-raising-hand:",
-      ":thumbsup:",
-      ":clap:",
-      ":man-tipping-hand:",
-      ":woman-tipping-hand:",
-      ":sparkles:",
-      ":zany_face:",
-      ":+1:",
-    ];
-
     let freeBet: boolean = false;
 
     if (msg.content.type === "reaction") {
       const reactionId: string = msg.id;
       const reactionContent: IReactionContent = msg.content;
 
-      if (freeEntryReactions.includes(reactionContent.reaction.b)) {
+      if (self.freeEntryReactions.includes(reactionContent.reaction.b)) {
 
         // Has croupier sent a message with messageId == what the reaction is pointing to?
         if (Object.keys(self.croupierMessages).includes(reactionContent.reaction.m.toString())) {
@@ -1371,7 +1395,7 @@ class Snipe {
 
     } else if (msg.content.type === "text" && msg.sender.username !== self.croupier.botUsername) {
 
-      freeEntryReactions.forEach((freeEntryReaction: string) => {
+      self.freeEntryReactions.forEach((freeEntryReaction: string) => {
 
         if (msg.content.text.body.includes(freeEntryReaction)) {
           freeBet = true;
@@ -1401,18 +1425,8 @@ class Snipe {
       const freeBetsCount: number = self.countFreeBets();
 
       if (freeBetsCount === 1 || freeBetsCount % 10 === 0) {
-        positiveMessage += `\nWant in?  Click on one of the reactions below or just type in chat`;
+        self.chatSend(positiveMessage);
       }
-
-      self.chatSend(positiveMessage).then((posPlusPlusMsg) => {
-
-        self.positiveEnergyMessageIds.add(posPlusPlusMsg.id);
-        if (freeBetsCount === 1 || freeBetsCount % 10 === 0) {
-          freeEntryReactions.forEach((freeEntryReaction: string) => {
-            self.bot2.chat.react(self.channel, posPlusPlusMsg.id, freeEntryReaction, undefined);
-          });
-        }
-      });
 
       self.resetSnipeClock();
 
@@ -1474,9 +1488,9 @@ class Snipe {
         break;
       case "freeze":
         sassyMessage = `@${consumer} played Freeze.  `;
-        sassyMessage += `Any action by anyone other than ${consumer} or @croupier during `;
-        sassyMessage += `the next 10 seconds will be ignored and instead increase ${consumer}'s `;
-        sassyMessage += `position by 1.`;
+        sassyMessage += `Any action by anyone other than ${consumer} or @${self.croupier.botUsername}`;
+        sassyMessage += ` during the next 10 seconds will be ignored and instead`;
+        sassyMessage += ` increase ${consumer}'s position by 1.`;
         self.chatSend(sassyMessage);
         self.freeze = consumer;
         setTimeout(() => {

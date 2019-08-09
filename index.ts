@@ -25,7 +25,15 @@ async function main(): Promise<any> {
     mongoDbUsername: process.env.MONGODB_USERNAME,
   });
 
+  croupier.copyRulesToKeybase().catch((e) => {
+    console.log("Could not copy latest RULES.md to Keybase because ", e);
+  });
   await croupier.run(true);
+
+  setInterval(() => {
+    croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01".toString(),
+                                           "@here", undefined, false);
+  }, 1000 * 60 * 60);
 }
 
 async function shutDown(): Promise<any> {
