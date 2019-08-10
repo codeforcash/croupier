@@ -20,6 +20,7 @@ class Croupier {
   public botUsername: string;
   public paperKey1: string;
   public paperKey2: string;
+  public respondedToDM: Set<string>;
 
   // Keeps track of all the channels that have had a Snipe running while the bot was running
   // i.e., whom to notify when the bot goes for shutdown or restarts
@@ -44,6 +45,7 @@ class Croupier {
     this.bot1 = new Bot(os.homedir());
     this.bot2 = new Bot(os.homedir());
     this.channelSet = new Set();
+    this.respondedToDM = new Set();
   }
 
   public async init(): Promise<any> {
@@ -578,6 +580,11 @@ class Croupier {
   }
 
   private respondToDM(msg: MessageSummary): void {
+    // Respond to DMs once per round
+    if (this.respondedToDM.has(msg.sender.username)) {
+      return;
+    }
+    this.respondedToDM.add(msg.sender.username);
     const channel: ChatChannel = msg.channel;
     const helpMsg: string = `These messages are not monitored.
 
