@@ -1585,7 +1585,7 @@ class Snipe {
       }
       if (!this.participants[i].transaction.freeBet &&
           this.participants[i].username !== streaker) {
-        break;
+        return streak;
       }
     }
     return streak;
@@ -1600,7 +1600,7 @@ class Snipe {
         if (this.participants[i].username === streaker) {
           streak++;
         } else {
-          break;
+          return streak;
         }
 
       }
