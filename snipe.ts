@@ -254,6 +254,12 @@ class Snipe {
 
     const self: Snipe = this;
 
+    //  If bet is > blinds, return true
+    const amount: number = parseFloat(this.participants[count - 1].transaction.amount);
+    if (amount > this.blinds) {
+      return true;
+    }
+
     // Have there been at least 3 bets?
     // And have the 3 most recent bets all been entered by the same person?
     if (
@@ -681,6 +687,12 @@ class Snipe {
         bettingTable += `${bettorRange[username][0].toLocaleString()} - ${bettorRange[username][1].toLocaleString()}\``;
       }
       bettingTable += ` (${this.displayFixedNice(chancePct)}% chance)`;
+
+      const contribution: number = this.calculateContribution(username);
+      if (contribution > 0) {
+        bettingTable += ` :fire: +${contribution}XLM`;
+      }
+
     });
 
     return bettingTable;
@@ -882,6 +894,19 @@ class Snipe {
 
       if (!participant.transaction.freeBet) {
         sum += parseFloat(participant.transaction.amount);
+      }
+    });
+    return sum;
+  }
+
+  public calculateContribution(username: string): number {
+    let sum: number;
+    sum = 0;
+    this.participants.forEach((participant) => {
+      if (!participant.transaction.freeBet) {
+        if (participant.username === username) {
+          sum += parseFloat(participant.transaction.amount);
+        }
       }
     });
     return sum;
@@ -1159,7 +1184,7 @@ class Snipe {
     if (blinds !== this.blinds) {
       this.blinds = blinds;
       this.croupier.updateSnipeLog(this.channel);
-      this.chatSend(`Blinds are raised. Minimum bet to receive powerup: **${this.displayFixedNice(blinds)}XLM**`);
+      this.chatSend(`Blinds are raised. Bet **${this.displayFixedNice(blinds)}XLM** to receive a powerup`);
     }
   }
 

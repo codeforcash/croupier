@@ -531,12 +531,6 @@ class Croupier {
         return;
       }
 
-      if (txn.amount < snipe.blinds) {
-        snipe.chatSend(`Bet was below blinds (${snipe.blinds}) - refunding`);
-        this.processRefund(txn, channel);
-        return;
-      }
-
       snipe.processNewBet(txn, msg).then((betProcessed) => {
         if (betProcessed) {
           snipe.resetSnipeClock();

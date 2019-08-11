@@ -8,7 +8,9 @@ Any player may initiate a sweepstakes by sending the Croupier XLM, amount being 
 
 ### Powerups
 
-If one enters the sweepstakes three times in a row, with a paid bet above the blinds threshold, without any other participant or newcomer entering the round in between any of the three bets, then a powerup will be randomly awarded.
+If one enters the sweepstakes with a paid bet at or above the blinds threshold, then a powerup will be randomly awarded.
+
+If one enters the sweepstakes three times in a row, with a paid bet above the blinds threshold, without any other, including newcomer, participant, including free bet, entering the round in between any of the three bets, then a powerup will be randomly awarded.
 
 If one enters the sweepstakes ten times in a row, with a free bet (see "No purchase necessary"), without any other participant or newcomer entering the round in between any of the ten bets, then a powerup will be randomly awarded.
 
@@ -32,14 +34,12 @@ If one enters the sweepstakes ten times in a row, with a free bet (see "No purch
 
 ### Blinds
 
-For the first ten minutes of the game, any Lumen bets must be at least 0.01XLM – those are the blinds. At ten minutes, and then every 5 minutes thereafter, the blinds double. Any Lumen bets below the blinds threshold are refunded less transaction fees.
+Blinds refer to the threshold to receive a powerup. For the first ten minutes of the game, blinds are 0.01XLM. At ten minutes, and then every 5 minutes thereafter, the blinds double. Blinds max at 10% of the pot size.
 
 #### Viewing someone else's powerups
 
 - Using the .powerups command you may see your own powerups. The fee is 1 position.
 - Using the .powerups {username} you may see another user's powerups. The fee is 10 position.
-
-"Pup shorthand": one may type `:dog:` instead of `.powerups`.
 
 ### No purchase necessary
 
