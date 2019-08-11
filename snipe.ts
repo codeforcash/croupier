@@ -1589,12 +1589,12 @@ class Snipe {
     let streak: number = 0;
     const streaker: string = this.participants[this.participants.length - 1].username;
     for (let i: number = this.participants.length - 1; i >= 0; i--) {
-      if (this.participants[i].username === streaker) {
-        streak++;
-      }
-      if (!this.participants[i].transaction.freeBet &&
-          this.participants[i].username !== streaker) {
-        return streak;
+      if (!this.participants[i].transaction.freeBet) {
+        if (this.participants[i].username === streaker) {
+          streak++;
+        }  else {
+          return streak;
+        }
       }
     }
     return streak;
@@ -1605,13 +1605,11 @@ class Snipe {
     const streaker: string = this.participants[this.participants.length - 1].username;
     for (let i: number = this.participants.length - 1; i >= 0; i--) {
       if (this.participants[i].transaction.freeBet) {
-
         if (this.participants[i].username === streaker) {
           streak++;
         } else {
           return streak;
         }
-
       }
     }
     return streak;
