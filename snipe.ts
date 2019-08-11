@@ -249,12 +249,20 @@ class Snipe {
     const self: Snipe = this;
 
     let threshold: number = 0;
-    if (this.calculateFreeStreak() >= 10) {
+
+    const freeStreak: number = this.calculateFreeStreak();
+    if (freeStreak >= 10) {
       threshold = 10;
-    } else if (this.calculatePaidStreak() >= 3) {
+    }
+    const paidStreak: number = this.calculatePaidStreak();
+    if (paidStreak >= 3) {
       threshold = 3;
     }
-    if (threshold > 0) {
+
+    console.log("free streak", freeStreak);
+    console.log("paid streak", paidStreak);
+
+    if (freeStreak >= 10 || paidStreak >= 3) {
       // But when was the most recent powerup issued?
 
       let lastPowerupIndex: number = 0;
@@ -279,6 +287,7 @@ class Snipe {
       }
 
     }
+    return false;
   }
 
   public freezeBet(msg: MessageSummary): void {
