@@ -269,7 +269,7 @@ class Snipe {
         return true;
       }
 
-      // Has it been at least 3 powerups since the most recent powerup was issued?
+      // Has it been at least 3|10 powerups since the most recent powerup was issued?
       // This logic doesn't work if there has never been a powerup issued,
       // hence the extra condition check ^
       if (count - 1 - lastPowerupIndex >= threshold) {
@@ -1579,7 +1579,7 @@ class Snipe {
   private calculatePaidStreak(): number {
     let streak: number = 0;
     const streaker: string = this.participants[this.participants.length - 1].username;
-    for (let i: number = this.participants.length - 1; i >= 0; i++) {
+    for (let i: number = this.participants.length - 1; i >= 0; i--) {
       if (this.participants[i].username === streaker) {
         streak++;
       }
@@ -1594,7 +1594,7 @@ class Snipe {
   private calculateFreeStreak(): number {
     let streak: number = 0;
     const streaker: string = this.participants[this.participants.length - 1].username;
-    for (let i: number = this.participants.length - 1; i >= 0; i++) {
+    for (let i: number = this.participants.length - 1; i >= 0; i--) {
       if (this.participants[i].transaction.freeBet) {
 
         if (this.participants[i].username === streaker) {
