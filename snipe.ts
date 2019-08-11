@@ -616,7 +616,7 @@ class Snipe {
 
       const contribution: number = this.calculateContribution(username);
       if (contribution > 0) {
-        bettingTable += ` :fire: +${contribution}XLM`;
+        bettingTable += ` :fire: +${this.displayFixedNice(contribution)}XLM`;
       }
 
     });
