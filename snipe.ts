@@ -1587,8 +1587,15 @@ class Snipe {
 
   private calculatePaidStreak(): number {
     let streak: number = 0;
-    const streaker: string = this.participants[this.participants.length - 1].username;
-    for (let i: number = this.participants.length - 1; i >= 0; i--) {
+    const mostRecentBetIndex: number = this.participants.length - 1;
+
+    // Not a streak
+    if (this.participants[mostRecentBetIndex].transaction.freeBet) {
+      return 0;
+    }
+
+    const streaker: string = this.participants[mostRecentBetIndex].username;
+    for (let i: number = mostRecentBetIndex; i >= 0; i--) {
       if (!this.participants[i].transaction.freeBet) {
         if (this.participants[i].username === streaker) {
           streak++;
@@ -1602,8 +1609,14 @@ class Snipe {
 
   private calculateFreeStreak(): number {
     let streak: number = 0;
-    const streaker: string = this.participants[this.participants.length - 1].username;
-    for (let i: number = this.participants.length - 1; i >= 0; i--) {
+    const mostRecentBetIndex: number = this.participants.length - 1;
+
+    if (!this.participants[mostRecentBetIndex].transaction.freeBet) {
+      return 0;
+    }
+
+    const streaker: string = this.participants[mostRecentBetIndex].username;
+    for (let i: number = mostRecentBetIndex; i >= 0; i--) {
       if (this.participants[i].transaction.freeBet) {
         if (this.participants[i].username === streaker) {
           streak++;
