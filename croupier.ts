@@ -102,7 +102,7 @@ class Croupier {
   }
 
   public pathToRules(): string {
-    return `/keybase/public/${this.botUsername}/RULES.md`;
+    return `https://github.com/codeforcash/croupier/blob/master/RULES.md`;
   }
 
   public copyRulesToKeybase(): Promise<any> {

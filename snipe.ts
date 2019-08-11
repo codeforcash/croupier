@@ -254,12 +254,6 @@ class Snipe {
 
     const self: Snipe = this;
 
-    //  If bet is > blinds, return true
-    const amount: number = parseFloat(this.participants[count - 1].transaction.amount);
-    if (amount > this.blinds) {
-      return true;
-    }
-
     // Have there been at least 3 bets?
     // And have the 3 most recent bets all been entered by the same person?
     if (
@@ -318,6 +312,12 @@ class Snipe {
       } else {
         //  This branch contains the logic for deciding whether to award
         //  a powerup for a paid bet.
+
+        //  If bet is < blinds, return false
+        const amount: number = parseFloat(this.participants[count - 1].transaction.amount);
+        if (amount < this.blinds) {
+          return false;
+        }
 
         // If any of the 3 most recent were free bets, do not award powerup.
         for (let i: number = 1; i <= 3; i++) {
@@ -953,7 +953,7 @@ class Snipe {
     message += `Minimum bet: 0.01XLM\n`;
     message += `Make 3 uninterrupted bets and receive a powerup!`;
     message += `\n\n**Please ensure you have read the rules before making any bets**  `;
-    message += `/keybase/public/${this.croupier.botUsername}/RULES.md`;
+    message += `${self.croupier.pathToRules()}`;
 
     self.chatSend(message);
 

@@ -8,9 +8,7 @@ Any player may initiate a sweepstakes by sending the Croupier XLM, amount being 
 
 ### Powerups
 
-If one enters the sweepstakes with a paid bet at or above the blinds threshold, then a powerup will be randomly awarded.
-
-If one enters the sweepstakes three times in a row, with a paid bet above the blinds threshold, without any other, including newcomer, participant, including free bet, entering the round in between any of the three bets, then a powerup will be randomly awarded.
+If one enters the sweepstakes three times in a row, with a paid bet at or above the blinds threshold, without any other, including newcomer, participant, including free bet, entering the round in between any of the three bets, then a powerup will be randomly awarded.
 
 If one enters the sweepstakes ten times in a row, with a free bet (see "No purchase necessary"), without any other participant or newcomer entering the round in between any of the ten bets, then a powerup will be randomly awarded.
 
