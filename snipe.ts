@@ -262,9 +262,11 @@ class Snipe {
     console.log("free streak", freeStreak);
     console.log("paid streak", paidStreak);
 
-    if (freeStreak >= 10 || paidStreak >= 3) {
-      // But when was the most recent powerup issued?
+    if (freeStreak >= 3 || paidStreak >= 3) {
 
+      // Has it been at least 3 powerups since the most recent powerup was issued?
+      // This logic doesn't work if there has never been a powerup issued,
+      // hence the extra condition check:
       let lastPowerupIndex: number = 0;
       this.participants.forEach((participant, idx) => {
         if (participant.powerup) {
@@ -272,14 +274,9 @@ class Snipe {
         }
       });
 
-      // Have we never issued a powerup before? Then, issue.
       if (lastPowerupIndex === 0) {
         return true;
       }
-
-      // Has it been at least 3|10 powerups since the most recent powerup was issued?
-      // This logic doesn't work if there has never been a powerup issued,
-      // hence the extra condition check ^
       if (count - 1 - lastPowerupIndex >= threshold) {
         return true;
       } else {
