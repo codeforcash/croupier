@@ -1597,7 +1597,8 @@ class Snipe {
     const streaker: string = this.participants[mostRecentBetIndex].username;
     for (let i: number = mostRecentBetIndex; i >= 0; i--) {
       if (!this.participants[i].transaction.freeBet) {
-        if (this.participants[i].username === streaker) {
+        if (this.participants[i].username === streaker &&
+            parseFloat(this.participants[i].transaction.amount) >= this.blinds) {
           streak++;
         }  else {
           return streak;
