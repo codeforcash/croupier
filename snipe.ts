@@ -251,8 +251,8 @@ class Snipe {
     let threshold: number = 0;
 
     const freeStreak: number = this.calculateFreeStreak();
-    if (freeStreak >= 10) {
-      threshold = 10;
+    if (freeStreak >= 3) {
+      threshold = 3;
     }
     const paidStreak: number = this.calculatePaidStreak();
     if (paidStreak >= 3) {
