@@ -14,6 +14,8 @@ This class handles game logic. If you want to modify game behavior, check out th
 
 There are many active `NodeJS.Timer` timers within the Snipe, that handle things like polling for the `/flip` results and counting down the game timer.
 
+People's bets are stored in the `participants: Array<IParticipant>` attribute of the Snipe class.  Their position sizes (which can be affected through powerups) are encoded separately with the `positionSizes: IPositionSize` attribute of the Snipe class. 
+
 ## Getting started
 
 ### Requirements
