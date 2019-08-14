@@ -52,7 +52,7 @@ async function main(): Promise<any> {
     });
 
     if (!active1) {
-      croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01",
+      croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.02",
                                              croupier.botUsername, "for @here countdown:3600", false);
     }
 
@@ -71,7 +71,7 @@ async function main(): Promise<any> {
       });
 
       if (!active) {
-        croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.01",
+        croupier.bot1.chat.sendMoneyInChat("cryptosnipe", "mkbot", "2.02",
                                      croupier.botUsername, "for @here countdown:3600", false);
       }
 

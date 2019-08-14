@@ -1661,8 +1661,8 @@ class Snipe {
 
     self.bot2.chat.react(channel, msg.id, ":gift:", undefined);
 
-    if (txn.amount < 2.01) {
-      self.chatSend("Please send >=2.01XLM for an @here snipe - just adding you instead");
+    if (txn.amount <= 2.01) {
+      self.chatSend("Please send >2.01XLM for an @here snipe - just adding you instead");
       self.addSnipeParticipant(txn);
       resolve(true);
       return;
