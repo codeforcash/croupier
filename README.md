@@ -1,3 +1,5 @@
+NOTE: The Code For Cash team has ceased development of Croupier.  Croupier is not actively maintained.
+
 # croupier
 
 ## Application architecture
